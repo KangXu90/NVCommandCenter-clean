@@ -55,7 +55,7 @@ function ConfigureScan_OpeningFcn(hObject, eventdata, handles, varargin)
 % Choose default command line output for ConfigureScan
 handles.output = hObject;
 
-if nargin > 3,
+if nargin > 3
     handles.ConfocalScan = varargin{1};
 else
     handles.ConfocalScan = ConfocalScan();

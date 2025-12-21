@@ -76,8 +76,8 @@ CheckPrefs();
 % First the ConfocalScan class with some default values
 handles.ConfocalScan = ConfocalScan();
 handles.ConfocalScan.MinValues = [-2 -2 0];
-handles.ConfocalScan.MaxValues = [2 2 0];
-handles.ConfocalScan.NumPoints = [100 100 1];
+handles.ConfocalScan.MaxValues = [2 2 100];
+handles.ConfocalScan.NumPoints = [100 100 100];
 handles.ConfocalScan.OffsetValues = [0,0,0];
 
 % initialize an empty string for the controlLinesController function.
@@ -86,25 +86,18 @@ handles.controlLinesController = '';
 
 % create an image acquisition object
 handles.ImageAcquisition = ImageAcquisition();
+% get the offsets for the image acquisition from system preferences
+handles.ImageAcquisition.OffsetValues = getpref('nv','OffsetValues');
+
 % added by kang, creat an Traker object
 handles.Tracker = TrackerCCNY();
-% init devices
-handles = InitDevices(handles);
+
 
 %Setup some stuff with the current position
 axes(handles.imageAxes);
 handles.xcrosshair = NaN;
 handles.ycrosshair = NaN;
 
-
-set(handles.text_curPosZ,'String','Z (um)');
-handles.ImageAcquisition.CurrentPosition(3) =  handles.ImageAcquisition.interfacePiezo.GetCurrentPosition();
-
-set(handles.cursorZ,'String',sprintf('%0.4f',handles.ImageAcquisition.CurrentPosition(3)));
-handles.ImageAcquisition.CursorPosition = handles.ImageAcquisition.CurrentPosition;
-set(handles.TrackThresh, 'string',sprintf('%d',handles.Tracker.TrackingThreshold))
-% get the offsets for the image acquisition from system preferences
-handles.ImageAcquisition.OffsetValues = getpref('nv','OffsetValues');
 
 % init Events
 handles.ImageAcquireEvent = ImageAcquireEvent();
@@ -118,9 +111,30 @@ InitIcons(hObject,handles);
 % load scans
 notify(handles.ImageAcquireEvent,'SavedScanChange');
 
+guidata(hObject, handles)
+
+
+%% init devices and update several parameter
+handles = InitDevices(handles);
+
+handles.ImageAcquisition.CurrentPosition(3) =  handles.ImageAcquisition.interfacePiezo.GetCurrentPosition();
+set(handles.cursorZ,'String',sprintf('%0.4f',handles.ImageAcquisition.CurrentPosition(3)));
+handles.ImageAcquisition.CursorPosition = handles.ImageAcquisition.CurrentPosition;
+
+
+set(handles.TrackThresh, 'string',sprintf('%d',handles.Tracker.TrackingThreshold))
+
+%%---optional init device---
+
+%PG
+
+
+
+
 % ??? Why do we need to do this instead of just guidata(hObject, handles);
 gobj = findall(0,'Name','ImageAcquire');
 guidata(gobj,handles);
+% guidata(hObject, handles)
 
 % UIWAIT makes ImageAcquire wait for user response (see UIRESUME)
 % uiwait(handles.figure1);
@@ -1123,7 +1137,7 @@ if ispref('nv','ImageAcquireInitScript')
     addpath('./config');
     handles = feval(script(1:end-2),handles);
     SetStatus(handles,sprintf('Init Script (%s) Run',script));
-    rmpath('./config');
+    % rmpath('./config');
 else
     SetStatus(handles,'Please run init script.');
 end
@@ -1156,15 +1170,25 @@ if OK
     guidata(hObject,handles);
 end
 
-function [] = InitIcons(hObject,handles)
+% function [] = InitIcons(hObject,handles)
+% 
+% [cdata,map] = imread('icons/clock_48.png','png');
+% handles.icons.counter = cdata(1:2:end,1:2:end,:);
+% set(handles.uipushtoolCounter,'CData',handles.icons.counter);
+% 
+% [cdata,map] = imread('icons/compass.jpg','jpeg');
+% handles.icons.nav = cdata;
+% set(handles.uipushtoolNavigate,'CData',handles.icons.nav);
+function InitIcons(hObject, handles)
 
-[cdata,map] = imread('icons/clock_48.png','png');
-handles.icons.counter = cdata(1:2:end,1:2:end,:);
-set(handles.uipushtoolCounter,'CData',handles.icons.counter);
+iconDir = fullfile(projectRoot(), 'icons');
 
-[cdata,map] = imread('icons/compass.jpg','jpeg');
-handles.icons.nav = cdata;
-set(handles.uipushtoolNavigate,'CData',handles.icons.nav);
+cdata = imread(fullfile(iconDir,'clock_48.png'));
+set(handles.uipushtoolCounter, 'CData', cdata(1:2:end,1:2:end,:));
+
+cdata = imread(fullfile(iconDir,'compass.jpg'));
+set(handles.uipushtoolNavigate, 'CData', cdata);
+
 
 % --------------------------------------------------------------------
 function uipushtoolCounter_ClickedCallback(hObject, eventdata, handles)
