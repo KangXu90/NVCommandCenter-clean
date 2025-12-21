@@ -1186,22 +1186,79 @@ NavigateUI(handles.ImageAcquisition);
 
 
 % --------------------------------------------------------------------
+% function uipushtoolTrack_ClickedCallback(hObject, eventdata, handles)
+% % hObject    handle to uipushtoolTrack (see GCBO)
+% % eventdata  reserved - to be defined in a future version of MATLAB
+% 
+% % handles    structure with handles and user data (see GUIDATA)
+% fig = ancestor(hObject,'figure');
+% handles = guidata(fig);  
+% 
+% 
+% % if Tracker defined in the config
+% if isfield(handles,'Tracker')
+%     TrackingViewer(handles.Tracker);
+%     handles.Tracker.trackCenter([0,0,0]);
+%     %Close the window so we don't accumulate listeners
+%     close(findobj(0,'name','TrackingViewer'));
+% 
+% end
+
 function uipushtoolTrack_ClickedCallback(hObject, eventdata, handles)
-% hObject    handle to uipushtoolTrack (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
 
+fig = ancestor(hObject,'figure');
+handles = guidata(fig);
 
-% if Tracker defined in the config
-if isfield(handles,'Tracker')
-
-    TrackingViewer(handles.Tracker);
-    handles.Tracker.trackCenter([0,0,0]);
-    %Close the window so we don't accumulate listeners
-    close(findobj(0,'name','TrackingViewer'));
-
+if ~isfield(handles,'Tracker')
+    return;
 end
 
+% --- snapshot laser state BEFORE tracking ---
+if isprop(handles.Tracker,'hwLaserState') && ~isempty(handles.Tracker.hwLaserState)
+    wasOn = logical(handles.Tracker.hwLaserState);
+else
+    wasOn = false; % 没记录过就默认 Off
+end
+
+% --- ensure restore even if trackCenter errors ---
+cleanupObj = onCleanup(@() restoreLaser(fig, wasOn));
+
+TrackingViewer(handles.Tracker);
+handles.Tracker.trackCenter([0,0,0]);
+close(findobj(0,'name','TrackingViewer'));
+
+
+function restoreLaser(fig, wasOn)
+handles = guidata(fig);
+
+try
+    % handles.Tracker.hwLaserController.init();
+    if wasOn
+        handles.Tracker.laserOn();
+    else
+        handles.Tracker.laserOff();
+    end
+    % 不 close（避免你说的 bug）
+
+    % 同步 UI（如果你 Laser 按钮 tag 叫 pushbuttonLaser）
+    if isfield(handles,'pushbuttonLaser') && ishghandle(handles.pushbuttonLaser)
+        set(handles.pushbuttonLaser,'Value',wasOn);
+        if wasOn
+            set(handles.pushbuttonLaser,'String','Laser On');
+            set(handles.pushbuttonLaser,'BackgroundColor','Green');
+        else
+            set(handles.pushbuttonLaser,'String','Laser Off');
+            set(handles.pushbuttonLaser,'BackgroundColor','white');
+        end
+    end
+
+    % 更新记录
+    handles.Tracker.hwLaserState = wasOn;
+    guidata(fig, handles);
+
+catch ME
+    warning('Failed to restore laser state: %s', ME.message);
+end
 
 % --------------------------------------------------------------------
 function pushtoolControlLines_ClickedCallback(hObject, eventdata, handles)
@@ -1633,32 +1690,64 @@ function TrackThreshSet_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 newTrackThresh = str2double(get(handles.TrackThresh,'String'));
 handles.Tracker.TrackingThreshold = newTrackThresh;
+guidata(ancestor(hObject,'figure'), handles);
 
 
 % --- Executes on button press in pushbuttonLaser.
+% function pushbuttonLaser_Callback(hObject, eventdata, handles)
+% % hObject    handle to pushbuttonLaser (see GCBO)
+% % eventdata  reserved - to be defined in a future version of MATLAB
+% % handles    structure with handles and user data (see GUIDATA)
+% 
+% % Hint: get(hObject,'Value') returns toggle state of pushbuttonLaser
+% LaserState = get(hObject,'Value');
+% if LaserState
+%    handles.Tracker.laserOn;
+% 
+%    set(hObject,'Value',1);
+%    set(hObject,'String','Laser On');
+%    set(hObject,'BackgroundColor','Green');
+% 
+% else
+%    handles.Tracker.laserOff;
+% 
+%    set(hObject,'Value',0);
+%    set(hObject,'String','Laser Off');
+%    set(hObject,'BackgroundColor','white');
+% 
+% end
+% handles.Tracker.LaserState = logical(get(hObject,'Value'));
+%  guidata(ancestor(hObject,'figure'), handles);
+
+% --- Executes on button press in pushbuttonLaser.
 function pushbuttonLaser_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbuttonLaser (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
 
-% Hint: get(hObject,'Value') returns toggle state of pushbuttonLaser
-LaserState = get(hObject,'Value');
-if LaserState
-   handles.Tracker.hwLaserController.init();
-   handles.Tracker.laserOn;
-   handles.Tracker.hwLaserController.close();
+fig = ancestor(hObject,'figure');
+handles = guidata(fig);
 
-   set(hObject,'Value',1);
-   set(hObject,'String','Laser On');
-   set(hObject,'BackgroundColor','Green');
+wantOn = logical(get(hObject,'Value'));
 
-else
-   handles.Tracker.hwLaserController.init();
-   handles.Tracker.laserOff;
-   handles.Tracker.hwLaserController.close();
-   set(hObject,'Value',0);
-   set(hObject,'String','Laser Off');
-   set(hObject,'BackgroundColor','white');
-
+try
+    % handles.Tracker.hwLaserController.init();
+    if wantOn
+        handles.Tracker.laserOn();
+        set(hObject,'String','Laser On');
+        set(hObject,'BackgroundColor','Green');
+    else
+        handles.Tracker.laserOff();
+        set(hObject,'String','Laser Off');
+        set(hObject,'BackgroundColor','white');
+    end
+    % 不要 close（你说 close 会引发 bug）
+catch ME
+    warning('Laser toggle failed: %s', ME.message);
+    % 失败就回滚 UI 到记录值（如果有）
+    if isprop(handles.Tracker,'LaserState') && ~isempty(handles.Tracker.LaserState)
+        set(hObject,'Value',handles.Tracker.LaserState);
+    end
 end
-    guidata(hObject,handles);
+
+% ✅ 关键：记录状态到 Tracker，并写回 figure guidata
+handles.Tracker.hwLaserState = wantOn;
+guidata(fig, handles);
+

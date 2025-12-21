@@ -84,7 +84,7 @@ classdef TrackerCCNY < Tracker
 %         end
         
         function [newRefPoint] = trackCenter(obj,jumpPoint)
-            
+                
                 %Make sure we are using correct ZController,
                % if use motor as z Controller (or xyz controller)
                %, could we used it to alignment the field?

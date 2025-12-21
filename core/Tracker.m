@@ -3,6 +3,7 @@ classdef Tracker < handle
     properties
         hCounterAcquisition
         hwLaserController
+        hwLaserState = 0
         hImageAcquisition
         InitialStepSize
         StepReductionFactor

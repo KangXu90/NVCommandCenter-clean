@@ -90,6 +90,7 @@ PG.init();
 Tracker = TrackerCCNY();
 Tracker.hCounterAcquisition = handles.Counter;
 Tracker.hwLaserController = PG;
+Tracker.hwLaserState = 0;
 Tracker.hImageAcquisition = handles.ImageAcquisition;
 Tracker.InitialStepSize = [0.01,0.01,1];
 Tracker.StepReductionFactor = [.5,.5,0.5];
