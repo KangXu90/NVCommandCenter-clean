@@ -57,13 +57,7 @@ end
 % End initialization code - DO NOT EDIT
 
 
-% --- Executes just before ImageAcquire is made visible.
 function ImageAcquire_OpeningFcn(hObject, eventdata, handles, varargin)
-% This function has no output args, see OutputFcn.
-% hObject    handle to figure
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-% varargin   command line arguments to ImageAcquire (see VARARGIN)
 
 % Choose default command line output for ImageAcquire
 handles.output = hObject;
@@ -71,64 +65,56 @@ handles.output = hObject;
 % check to make sure all preferences are set
 CheckPrefs();
 
-% Update handles structure with some classes we'll need.
-
-% First the ConfocalScan class with some default values
+% ---- Core objects (no hardware) ----
 handles.ConfocalScan = ConfocalScan();
 handles.ConfocalScan.MinValues = [-2 -2 0];
 handles.ConfocalScan.MaxValues = [2 2 100];
 handles.ConfocalScan.NumPoints = [100 100 100];
 handles.ConfocalScan.OffsetValues = [0,0,0];
 
-% initialize an empty string for the controlLinesController function.
-% this can be reassigned in the init script.
 handles.controlLinesController = '';
 
-% create an image acquisition object
 handles.ImageAcquisition = ImageAcquisition();
-% get the offsets for the image acquisition from system preferences
-handles.ImageAcquisition.OffsetValues = getpref('nv','OffsetValues');
+handles.ImageAcquisition.OffsetValues = getpref('nv','OffsetValues',[0 0 0]);
 
-% added by kang, creat an Traker object
 handles.Tracker = TrackerCCNY();
 
-
-%Setup some stuff with the current position
 axes(handles.imageAxes);
 handles.xcrosshair = NaN;
 handles.ycrosshair = NaN;
 
-
-% init Events
 handles.ImageAcquireEvent = ImageAcquireEvent();
 
-% init Events
 InitEvents(hObject,handles);
-
-% init Icons
 InitIcons(hObject,handles);
 
-% load scans
 notify(handles.ImageAcquireEvent,'SavedScanChange');
 
-guidata(hObject, handles)
+SetStatus(handles, sprintf('ImageAcquire ready (hardware not connected).'));
 
+% Save once so GUI is usable even before hardware
+% guidata(hObject, handles);
 
-%% init devices and update several parameter
-handles = InitDevices(handles);
+% ---- Optional hardware init (postponed) ----
 
-handles.ImageAcquisition.CurrentPosition(3) =  handles.ImageAcquisition.interfacePiezo.GetCurrentPosition();
-set(handles.cursorZ,'String',sprintf('%0.4f',handles.ImageAcquisition.CurrentPosition(3)));
-handles.ImageAcquisition.CursorPosition = handles.ImageAcquisition.CurrentPosition;
+    try
+        handles = InitDevices(handles);
 
+        % update Z and cursor only AFTER hardware is connected
+        z = handles.ImageAcquisition.interfacePiezo.GetCurrentPosition();
+        handles.ImageAcquisition.CurrentPosition(3) = z;
+        handles.ImageAcquisition.CursorPosition = handles.ImageAcquisition.CurrentPosition;
+        set(handles.cursorZ,'String',sprintf('%0.4f', z));
 
-set(handles.TrackThresh, 'string',sprintf('%d',handles.Tracker.TrackingThreshold))
+        set(handles.TrackThresh,'String', sprintf('%d', handles.Tracker.TrackingThreshold));
+        SetStatus(handles, sprintf('Hardware connected.'));
+    catch ME
+        SetStatus(handles, ['Hardware init failed: ' msg]);
+        warning('InitDevices failed: %s', ME.message);
+    end
 
-%%---optional init device---
-
-%PG
-
-
+    % write back after optional init
+    % guidata(hObject, handles);
 
 
 % ??? Why do we need to do this instead of just guidata(hObject, handles);
