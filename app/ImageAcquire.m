@@ -57,7 +57,13 @@ end
 % End initialization code - DO NOT EDIT
 
 
+% --- Executes just before ImageAcquire is made visible.
 function ImageAcquire_OpeningFcn(hObject, eventdata, handles, varargin)
+% This function has no output args, see OutputFcn.
+% hObject    handle to figure
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+% varargin   command line arguments to ImageAcquire (see VARARGIN)
 
 % Choose default command line output for ImageAcquire
 handles.output = hObject;
@@ -65,62 +71,56 @@ handles.output = hObject;
 % check to make sure all preferences are set
 CheckPrefs();
 
-% ---- Core objects (no hardware) ----
+% Update handles structure with some classes we'll need.
+
+% First the ConfocalScan class with some default values
 handles.ConfocalScan = ConfocalScan();
 handles.ConfocalScan.MinValues = [-2 -2 0];
 handles.ConfocalScan.MaxValues = [2 2 100];
 handles.ConfocalScan.NumPoints = [100 100 100];
 handles.ConfocalScan.OffsetValues = [0,0,0];
 
+% initialize an empty string for the controlLinesController function.
+% this can be reassigned in the init script.
 handles.controlLinesController = '';
 
+% create an image acquisition object
 handles.ImageAcquisition = ImageAcquisition();
-handles.ImageAcquisition.OffsetValues = getpref('nv','OffsetValues',[0 0 0]);
-
+% added by kang, creat an Traker object
 handles.Tracker = TrackerCCNY();
+% init devices
+handles = InitDevices(handles);
 
+%Setup some stuff with the current position
 axes(handles.imageAxes);
 handles.xcrosshair = NaN;
 handles.ycrosshair = NaN;
 
+
+set(handles.text_curPosZ,'String','Z (um)');
+handles.ImageAcquisition.CurrentPosition(3) =  handles.ImageAcquisition.interfacePiezo.GetCurrentPosition();
+
+set(handles.cursorZ,'String',sprintf('%0.4f',handles.ImageAcquisition.CurrentPosition(3)));
+handles.ImageAcquisition.CursorPosition = handles.ImageAcquisition.CurrentPosition;
+set(handles.TrackThresh, 'string',sprintf('%d',handles.Tracker.TrackingThreshold))
+% get the offsets for the image acquisition from system preferences
+handles.ImageAcquisition.OffsetValues = getpref('nv','OffsetValues');
+
+% init Events
 handles.ImageAcquireEvent = ImageAcquireEvent();
 
+% init Events
 InitEvents(hObject,handles);
+
+% init Icons
 InitIcons(hObject,handles);
 
+% load scans
 notify(handles.ImageAcquireEvent,'SavedScanChange');
-
-SetStatus(handles, sprintf('ImageAcquire ready (hardware not connected).'));
-
-% Save once so GUI is usable even before hardware
-% guidata(hObject, handles);
-
-% ---- Optional hardware init (postponed) ----
-
-    try
-        handles = InitDevices(handles);
-
-        % update Z and cursor only AFTER hardware is connected
-        z = handles.ImageAcquisition.interfacePiezo.GetCurrentPosition();
-        handles.ImageAcquisition.CurrentPosition(3) = z;
-        handles.ImageAcquisition.CursorPosition = handles.ImageAcquisition.CurrentPosition;
-        set(handles.cursorZ,'String',sprintf('%0.4f', z));
-
-        set(handles.TrackThresh,'String', sprintf('%d', handles.Tracker.TrackingThreshold));
-        SetStatus(handles, sprintf('Hardware connected.'));
-    catch ME
-        SetStatus(handles, ['Hardware init failed: ' msg]);
-        warning('InitDevices failed: %s', ME.message);
-    end
-
-    % write back after optional init
-    % guidata(hObject, handles);
-
 
 % ??? Why do we need to do this instead of just guidata(hObject, handles);
 gobj = findall(0,'Name','ImageAcquire');
 guidata(gobj,handles);
-% guidata(hObject, handles)
 
 % UIWAIT makes ImageAcquire wait for user response (see UIRESUME)
 % uiwait(handles.figure1);
@@ -1151,30 +1151,20 @@ if OK
     % evaluate the script
     addpath('./config');
     [hObject,handles] = feval(handles.initScript(1:end-2),hObject,handles);
-    rmpath('./config');
+    % rmpath('./config');
     SetStatus(handles,sprintf('Init Script (%s) Run',handles.initScript));
     guidata(hObject,handles);
 end
 
-% function [] = InitIcons(hObject,handles)
-% 
-% [cdata,map] = imread('icons/clock_48.png','png');
-% handles.icons.counter = cdata(1:2:end,1:2:end,:);
-% set(handles.uipushtoolCounter,'CData',handles.icons.counter);
-% 
-% [cdata,map] = imread('icons/compass.jpg','jpeg');
-% handles.icons.nav = cdata;
-% set(handles.uipushtoolNavigate,'CData',handles.icons.nav);
-function InitIcons(hObject, handles)
+function [] = InitIcons(hObject,handles)
 
-iconDir = fullfile(projectRoot(), 'icons');
+[cdata,map] = imread('icons/clock_48.png','png');
+handles.icons.counter = cdata(1:2:end,1:2:end,:);
+set(handles.uipushtoolCounter,'CData',handles.icons.counter);
 
-cdata = imread(fullfile(iconDir,'clock_48.png'));
-set(handles.uipushtoolCounter, 'CData', cdata(1:2:end,1:2:end,:));
-
-cdata = imread(fullfile(iconDir,'compass.jpg'));
-set(handles.uipushtoolNavigate, 'CData', cdata);
-
+[cdata,map] = imread('icons/compass.jpg','jpeg');
+handles.icons.nav = cdata;
+set(handles.uipushtoolNavigate,'CData',handles.icons.nav);
 
 % --------------------------------------------------------------------
 function uipushtoolCounter_ClickedCallback(hObject, eventdata, handles)
