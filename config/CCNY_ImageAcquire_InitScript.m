@@ -7,21 +7,20 @@ function [handles] = CCNY_ImageAcquire_InitScript(handles)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
         % configure NIDAQ Driver Instance
-        LibraryName = 'nidaqmx';
-        LibraryFilePath = 'C:\WINDOWS\system32\nicaiu.dll';
-        HeaderFilePath = 'D:\Control software with AWG control (Kang) - confined liquid - Tabor\config\NIDAQmx.h';
-        ni = NIDAQ_Driver(LibraryName,LibraryFilePath,HeaderFilePath);
+cfg = site_ccny();
 
-        %%
-        % add Counter Line
-        ni.addCounterInLine('Dev1/ctr0','/Dev1/PFI0',1);
+ni = NIDAQ_Driver(cfg.ni.libraryName, cfg.ni.dll, cfg.ni.header);
 
-        % add Clock Line
-        ni.addClockLine('Dev1/ctr1','/Dev1/PFI13');
+% Counter + clock
+ni.addCounterInLine(cfg.ni.counter.ctr0, cfg.ni.counter.pfi0, 1);
+ni.addClockLine(cfg.ni.clock.internal, cfg.ni.clock.pfi13);
 
-        % add AO lines
-        ni.addAOLine('Dev1/ao0',0);
-        ni.addAOLine('Dev1/ao1',0);
+% Galvo AO
+ni.addAOLine(cfg.ni.ao.x, 0);
+ni.addAOLine(cfg.ni.ao.y, 0);
+
+
+
 
         % Write the AO
         ni.WriteAnalogOutAllLines;
