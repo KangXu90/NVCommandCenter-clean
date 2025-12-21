@@ -27,105 +27,135 @@ for k=1:numel(fN),
 end
 
 if isfield(handles,'hImageAcquisition'),
-   set(handles.textCurPosX,'String',sprintf('X = %.4f',handles.hImageAcquisition.CursorPosition(1)));
-   set(handles.textCurPosY,'String',sprintf('Y = %.4f',handles.hImageAcquisition.CursorPosition(2)));
-   set(handles.textCurPosZ,'String',sprintf('Z = %.4f',handles.hImageAcquisition.CursorPosition(3)));
+    set(handles.textCurPosX,'String',sprintf('X = %.4f',handles.hImageAcquisition.CursorPosition(1)));
+    set(handles.textCurPosY,'String',sprintf('Y = %.4f',handles.hImageAcquisition.CursorPosition(2)));
+    set(handles.textCurPosZ,'String',sprintf('Z = %.4f',handles.hImageAcquisition.CursorPosition(3)));
+end
+
+
+% ---- Tabor Proteus init (optional) ----
+cfg = site_ccny();  % 如果你在脚本开头已经有这一句，这里不用重复
+
+if isfield(cfg,'tabor') && isfield(cfg.tabor,'enable') && cfg.tabor.enable
+    try
+        connStr = cfg.tabor.connStr;
+        paranoia_level = cfg.tabor.paranoia_level;
+
+        inst = TEProteusInst(connStr, paranoia_level);
+
+        res = inst.Connect();
+        % if you want to enforce connection success:
+        % assert(res == true);
+
+        % Optional instrument init commands
+        if isfield(cfg.tabor,'do_clear') && cfg.tabor.do_clear
+            inst.SendCmd('*CLS');
+        end
+        if isfield(cfg.tabor,'do_reset') && cfg.tabor.do_reset
+            inst.SendCmd('*RST');
+        end
+
+        % Optional: store handle(s)
+        handles.TEProteusInst = inst;
+
+        if isfield(cfg.tabor,'expose_as_signal_generator') && cfg.tabor.expose_as_signal_generator
+            handles.SignalGenerator = inst;
+        end
+
+        % Optional: expected ID logging (your original code hard-coded idnstr)
+        if isfield(cfg.tabor,'idn_expected') && ~isempty(cfg.tabor.idn_expected)
+            fprintf('Connected to Proteus (expected ID): %s\n', cfg.tabor.idn_expected);
+        else
+            fprintf('Connected to Proteus at %s\n', connStr);
+        end
+
+        % IMPORTANT:
+        % Do NOT disconnect if you intend to use the handle later.
+        % If you just want to test connection at startup, then disconnect here.
+        %
+        % If your workflow needs the instrument active during experiment,
+        % keep it connected and provide a cleanup on app close instead.
+        %
+        % inst.Disconnect();
+
+    catch ME
+        warning('[ccnyInitScript] Proteus init failed: %s', ME.message);
+        % Optionally: ensure handle exists and is empty
+        handles.TEProteusInst = [];
+    end
+end
+
+% ---- Microwave Amplifier init (VISA-Serial) ----
+% cfg = site_ccny();  % 如果脚本开头已有 cfg，这里不用重复
+
+if isfield(cfg,'mwAmp') && isfield(cfg.mwAmp,'enable') && cfg.mwAmp.enable
+    try
+        vendor = cfg.mwAmp.vendor;
+        rsrc   = cfg.mwAmp.rsrc;
+
+        ampObj = instrfind('Type','visa-serial','RsrcName',rsrc,'Tag','');
+
+        if isempty(ampObj)
+            ampObj = visa(vendor, rsrc);
+        else
+            if isfield(cfg.mwAmp,'closeExisting') && cfg.mwAmp.closeExisting
+                try fclose(ampObj); catch, end
+            end
+            ampObj = ampObj(1);
+        end
+
+        % Apply serial parameters
+        if isprop(ampObj,'BaudRate'),  ampObj.BaudRate  = cfg.mwAmp.baudRate; end
+        if isprop(ampObj,'DataBits'),  ampObj.DataBits  = cfg.mwAmp.dataBits; end
+        if isprop(ampObj,'StopBits'),  ampObj.StopBits  = cfg.mwAmp.stopBits; end
+        if isprop(ampObj,'Parity'),    ampObj.Parity    = cfg.mwAmp.parity; end
+        if isprop(ampObj,'Terminator'),ampObj.Terminator= cfg.mwAmp.terminator; end
+        if isprop(ampObj,'Timeout'),   ampObj.Timeout   = cfg.mwAmp.timeout; end
+
+        % Open connection
+        % if strcmpi(ampObj.Status,'closed')
+        %     fopen(ampObj);
+        % end
+
+        handles.MicrowaveAmp = ampObj;
+        fprintf('MicrowaveAmp connected: %s (%s)\n', rsrc, vendor);
+
+    catch ME
+        warning('[ccnyInitScript] MicrowaveAmp init failed: %s', ME.message);
+        handles.MicrowaveAmp = [];
+    end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% init the signal generator
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% handles.SignalGenerator = RohdeSchwarzSignalGenerator('tcpip','134.74.27.145',5025);
-%     %handles.SignalGenerator.reset();
-% handles.SignalGenerator.setModulationOff();
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% init AWG controller
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
- %handles.TekAWGController = TekAWGController('tcpip','169.254.90.56',4000);    
-% handles.TekAWGController = TekAWGController('tcpip','134.74.27.123',4000); % before 062723 tcpip 134.74.27.103
-% handles.TekAWGController.reset();
-% handles.TekAWGController.sendstr('SOUR1:ROSC:SOUR EXT');
-% handles.TekAWGController.sendstr('INSTRUMENT:COUPLE:SOURCE ALL');
-% handles.TekAWGController.sendstr('TRIG:IMP 50ohm;:AWGCONTROL:RMODE TRIG');
-% handles.TekAWGController.setSourceFrequency(1.0e9);
-% % set marker voltage high/low
-% handles.TekAWGController.setmarker(1,1,0,2.4);
-% handles.TekAWGController.setmarker(1,2,0,2.4);
-% handles.TekAWGController.setmarker(2,1,0,2.4);
-% handles.TekAWGController.setmarker(2,2,0,2.4);
-% % set the amplitude and offset
-% handles.TekAWGController.setSourceAmplitudeandOffset(1,1,0);
-% % delete the sequences
-% handles.TekAWGController.sendstr(sprintf('WLIST:WAVEFORM:DELETE ALL'));
-
-%%% init the Tabor proteus
-
-% Communication Parameters
-connStr = '134.74.27.16'; % your IP here
-paranoia_level = 1; % 0, 1 or 2
-
-% Create Administrator
-inst = TEProteusInst(connStr, paranoia_level);
-fprintf('\n');
-
-res = inst.Connect();
-% assert (res == true);
-
-% Identify instrument using the standard IEEE-488.2 Command
-idnstr = 'P9484D';
-fprintf('\nConnected to: %s\n', idnstr);
-inst.SendCmd('*CLS');
-inst.SendCmd('*RST');
-inst.Disconnect();    
-handles.TEProteusInst = inst;
-handles.SignalGenerator = inst;
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% init the MW amplitude
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% setup the microwave amplifier
-
-handles.MicrowaveAmp = instrfind('Type', 'visa-serial', 'RsrcName', 'ASRL5::INSTR', 'Tag', '');
-% Create the VISA-Serial object if it does not exist
-% otherwise use the object that was found.
-if isempty(handles.MicrowaveAmp)
-    handles.MicrowaveAmp = visa('NI', 'ASRL5::INSTR');
-else
-    fclose(handles.MicrowaveAmp);
-    handles.MicrowaveAmp = handles.MicrowaveAmp(1);
-end
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % init the pulse generator
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% 
+%
 %         LibraryFile = 'C:\Program Files\SpinCore\SpinAPI\dll\spinapi.dll';
 %         HeaderFile = 'C:\Program Files\SpinCore\SpinAPI\dll\spinapi.h';
 %         LibraryName = 'pb';
 %         handles.PulseGenerator = SpinCorePulseGenerator2();
-%         
+%
 %         handles.PulseGenerator.Initialize(LibraryFile,HeaderFile,LibraryName);
-% 
+%
 %         % set PG clock rate to 1MHz
 %         % for SpinCore, clock rate is in units of MHZ
 %         handles.PulseGenerator.setClockRate(4e8);
-        % LibraryFilePath = 'C:\SpinCore\SpinAPI\lib\spinapi64.dll';
-        % HeaderFilePath = 'C:\SpinCore\SpinAPI\include\spinapi.h';
-        % HeaderFilePath2 = 'C:\SpinCore\SpinAPI\include\pulseblaster.h';
-        % LibraryName = 'pb';
-        % PG = SpinCorePulseGenerator2();
-        % 
-        % PG.Initialize(LibraryFilePath,HeaderFilePath,HeaderFilePath2,LibraryName);
+% LibraryFilePath = 'C:\SpinCore\SpinAPI\lib\spinapi64.dll';
+% HeaderFilePath = 'C:\SpinCore\SpinAPI\include\spinapi.h';
+% HeaderFilePath2 = 'C:\SpinCore\SpinAPI\include\pulseblaster.h';
+% LibraryName = 'pb';
+% PG = SpinCorePulseGenerator2();
+%
+% PG.Initialize(LibraryFilePath,HeaderFilePath,HeaderFilePath2,LibraryName);
 
-        % set PG clock rate to 1MHz
-        % for SpinCore, clock rate is in units of MHZ
-        % PG.setClockRate(4e8);
-        
-        % init the pg
-        % PG.init();
-        %  handles.PulseGenerator = PG;
+% set PG clock rate to 1MHz
+% for SpinCore, clock rate is in units of MHZ
+% PG.setClockRate(4e8);
+
+% init the pg
+% PG.init();
+%  handles.PulseGenerator = PG;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % init a fast counter for pulsing
@@ -167,7 +197,7 @@ handles.Counter.hwHandle.ReadTimeout = 1;
 % configure the tracking algorithm
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % PG = handles.PulseGenerator;
-% 
+%
 % %%%%% CONFIGURE TRACKER %%%%%
 % Tracker = TrackerCCNY();
 % Tracker.hCounterAcquisition = handles.TrackCounter;
@@ -182,7 +212,7 @@ handles.Counter.hwHandle.ReadTimeout = 1;
 % Tracker.InitialPosition = handles.hImageAcquisition.CursorPosition;
 % Tracker.MaxCursorPosition = [5,5];
 % Tracker.MinCursorPosition = [-5,-5];
-% 
+%
 % handles.Tracker = Tracker;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -193,11 +223,11 @@ handles.Counter.hwHandle.ReadTimeout = 1;
 SNX = 27250249; % put in the serial number of the hardware
 SNY = 27250244;
 SNZ = 27250912;
-% 
+%
 fpos    = get(0,'DefaultFigurePosition'); % figure default position
 fpos(3) = 650; % figure window size;Width
 fpos(4) = 450; % Height
- 
+
 %creat B field Control GUIs and handles  (magnet? Commented Daniela)
 %  BXFig = figure('Position', fpos,'Menu','None','Name','X-Axis');
 %  handles.BControlX = actxcontrol('MGMOTOR.MGMotorCtrl.1',[20 20 600 400 ], BXFig);
@@ -205,22 +235,22 @@ fpos(4) = 450; % Height
 %  handles.BControlY = actxcontrol('MGMOTOR.MGMotorCtrl.1',[20 20 600 400 ], BYFig);
 %  BZFig = figure('Position', fpos,'Menu','None','Name','Z-Axis');
 %  handles.BControlZ = actxcontrol('MGMOTOR.MGMotorCtrl.1',[20 20 600 400 ], BZFig);
-%  
+%
 %% Initialize
 % Start Control (commented by Daniela for magnets)
 % handles.BControlX.StartCtrl;
 % handles.BControlY.StartCtrl;
 % handles.BControlZ.StartCtrl;
-% % 
+% %
 % set(handles.BControlX,'HWSerialNum', SNX);
 % set(handles.BControlY,'HWSerialNum', SNY);
 % set(handles.BControlZ,'HWSerialNum', SNZ);
-% % 
+% %
 % % % Indentify the device
 % handles.BControlX.Identify;
 % handles.BControlY.Identify;
 % handles.BControlZ.Identify;
-%  
+%
 % pause(5); % waiting for the GUI to load up;
 % %% Controlling the Hardware
 % handles.BControlX.MoveHome(0,0); % Home the stage. First 0 is the channel ID (channel 1)
@@ -233,7 +263,7 @@ handles.BControlJogSize = .1;
 
 %%
 % fix the path
-addpath([pwd,'\','Sequences\']);
+% addpath([pwd,'\','Sequences\']);
 
 % add in hack for spin noise measurements
 handles.options.spinNoiseAvg = 0; % turn on spin noise averaging;

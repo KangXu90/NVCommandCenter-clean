@@ -55,7 +55,21 @@ cfg.ni.clock.externalPFI  = cfg.ni.counter.pfi0;
 cfg.ni.ao = struct();
 cfg.ni.ao.x = sprintf('%s/ao0', cfg.ni.dev);
 cfg.ni.ao.y = sprintf('%s/ao1', cfg.ni.dev);
+%% ---------- Sanity checks ----------
+% You can comment these out if you prefer "silent" config.
+mustExist = {
+    cfg.ni.dll, 'file', 'NI-DAQmx nicaiu.dll not found'
+    cfg.ni.header, 'file', 'NIDAQmx.h not found (repo config or NI include)'
+};
 
+for k = 1:size(mustExist,1)
+    p = mustExist{k,1};
+    t = mustExist{k,2};
+    msg = mustExist{k,3};
+    if isempty(p) || exist(p, t) == 0
+        warning('[site_ccny] %s. Path="%s"', msg, p);
+    end
+end
 %% ---------- SpinCore / PulseBlaster (optional) ----------
 cfg.spincore = struct();
 cfg.spincore.libraryName = 'pb';
@@ -75,22 +89,49 @@ cfg.spincore.header_pulseblaster = firstExistingFile({
     'C:\SpinCore\SpinAPI\include\pulseblaster.h', ...
     'C:\SpinCore\SpinAPI\include\pulseblaster.h' ...
 });
+%% ---------- PI piezostage ----------
+cfg.pi = struct();
+cfg.pi.alias = 'E816';
+cfg.pi.dll   = fullfile(cfg.root,'drivers','E816_DLL_x64.dll');
+cfg.pi.h     = fullfile(cfg.root,'drivers','E816_DLL.h');
 
-%% ---------- Sanity checks ----------
-% You can comment these out if you prefer "silent" config.
-mustExist = {
-    cfg.ni.dll, 'file', 'NI-DAQmx nicaiu.dll not found'
-    cfg.ni.header, 'file', 'NIDAQmx.h not found (repo config or NI include)'
-};
+%% ---------- Tabor Proteus (TEProteusInst) ----------
+cfg.tabor = struct();
 
-for k = 1:size(mustExist,1)
-    p = mustExist{k,1};
-    t = mustExist{k,2};
-    msg = mustExist{k,3};
-    if isempty(p) || exist(p, t) == 0
-        warning('[site_ccny] %s. Path="%s"', msg, p);
-    end
-end
+% Enable/disable Proteus init from scripts
+cfg.tabor.enable = true;
+
+% Communication
+cfg.tabor.connStr = '134.74.27.16';    % Proteus IP
+cfg.tabor.paranoia_level = 1;          % 0 / 1 / 2
+
+% Optional identification / expectations
+cfg.tabor.idn_expected = 'P9484D';     % your instrument ID (optional)
+cfg.tabor.do_reset = true;             % send *RST
+cfg.tabor.do_clear = true;             % send *CLS
+
+% Optional: make Proteus also serve as SignalGenerator handle
+cfg.tabor.expose_as_signal_generator = true;
+%% ---------- Microwave Amplifier (VISA-Serial) ----------
+cfg.mwAmp = struct();
+cfg.mwAmp.enable = true;
+
+% VISA vendor (depends on your VISA installation: 'NI' is common)
+cfg.mwAmp.vendor = 'NI';
+
+% Resource name (Serial over VISA)
+cfg.mwAmp.rsrc = 'ASRL5::INSTR';
+
+% Serial settings (adjust to your amp spec)
+cfg.mwAmp.baudRate = 9600;
+cfg.mwAmp.dataBits = 8;
+cfg.mwAmp.stopBits = 1;
+cfg.mwAmp.parity   = 'none';
+cfg.mwAmp.terminator = 'LF';     % or 'CR/LF' if needed
+cfg.mwAmp.timeout = 2;           % seconds
+
+% Optional: whether to close existing found object
+cfg.mwAmp.closeExisting = true;
 
 end
 

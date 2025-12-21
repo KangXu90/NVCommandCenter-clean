@@ -33,10 +33,7 @@ ni.addAOLine(cfg.ni.ao.y, 0);
 %  SETUP PI (Used for Z control)            %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
-        shrlib = 'E816_DLL_x64.dll';
-        hfile = 'E816_DLL.h';
-        LibAlias = 'E816';
-        PI = PIControl(LibAlias,shrlib,hfile);
+        PI = PIControl(cfg.pi.alias,cfg.pi.dll,cfg.pi.h);
 
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -73,13 +70,14 @@ handles.Counter.CounterOutLine = 1;
 % init the pulse generator (used for Tracking)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-        LibraryFilePath = 'C:\SpinCore\SpinAPI\lib\spinapi64.dll';
-        HeaderFilePath = 'C:\SpinCore\SpinAPI\include\spinapi.h';
-        HeaderFilePath2 = 'C:\SpinCore\SpinAPI\include\pulseblaster.h';
-        LibraryName = 'pb';
+        % LibraryFilePath = 'C:\SpinCore\SpinAPI\lib\spinapi64.dll';
+        % HeaderFilePath = 'C:\SpinCore\SpinAPI\include\spinapi.h';
+        % HeaderFilePath2 = 'C:\SpinCore\SpinAPI\include\pulseblaster.h';
+        % LibraryName = 'pb';
         PG = SpinCorePulseGenerator2();
         
-        PG.Initialize(LibraryFilePath,HeaderFilePath,HeaderFilePath2,LibraryName);
+        PG.Initialize(cfg.spincore.dll,cfg.spincore.header_spinapi,...
+            cfg.spincore.header_pulseblaster,cfg.spincore.libraryName);
 
         % set PG clock rate to 1MHz
         % for SpinCore, clock rate is in units of MHZ
