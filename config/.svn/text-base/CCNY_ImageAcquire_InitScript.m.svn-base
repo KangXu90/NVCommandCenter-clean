@@ -1,0 +1,100 @@
+
+function [handles] = CCNY_ImageAcquire_InitScript(handles)
+
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  SETUP NI              %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+        % configure NIDAQ Driver Instance
+        LibraryName = 'nidaqmx';
+        LibraryFilePath = 'C:\WINDOWS\system32\nicaiu.dll';
+        HeaderFilePath = 'C:\Program Files\National Instruments\NI-DAQ\DAQmx ANSI C Dev\include\NIDAQmx.h';
+        ni = NIDAQ_Driver(LibraryName,LibraryFilePath,HeaderFilePath);
+        %%
+        % add Counter Line
+        ni.addCounterInLine('Dev1/ctr0','/Dev1/PFI0',1);
+
+        % add Clock Line
+        ni.addClockLine('Dev1/ctr1','/Dev1/PFI13');
+
+        % add AO lines
+        ni.addAOLine('Dev1/ao0',0);
+        ni.addAOLine('Dev1/ao1',0);
+
+        % Write the AO
+        ni.WriteAnalogOutAllLines;
+
+
+        % send to the handles structure
+        handles.NI = ni;
+
+
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  SETUP ImageAcqusition HANDLES             %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % hookup the NI to the IA
+        handles.ImageAcquisition.interfaceNIDAQ = handles.NI;
+        %handles.ImageAcquisition.interfaceAPT = [];
+        handles.ImageAcquisition.ZController = 'none';
+
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% SETUP CounterAcquisition %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% init Counter
+handles.Counter = CounterAcquisition();
+handles.Counter.interfaceNIDAQ = handles.NI;
+handles.Counter.DwellTime = 0.005;
+handles.Counter.NumberOfSamples = 100;
+handles.Counter.LoopsUntilTimeOut = 100;
+handles.Counter.CounterInLine = 1;
+handles.Counter.CounterOutLine = 1;
+
+
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% SETUP Tracking                %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%% PULSE GENERATOR %%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% init the pulse generator
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+        LibraryFile = 'C:\Program Files\SpinCore\SpinAPI\dll\spinapi.dll';
+        HeaderFile = 'C:\Program Files\SpinCore\SpinAPI\dll\spinapi.h';
+        LibraryName = 'pb';
+        PG = SpinCorePulseGenerator();
+        
+        PG.Initialize(LibraryFile,HeaderFile,LibraryName);
+
+        % set PG clock rate to 1MHz
+        % for SpinCore, clock rate is in units of MHZ
+        PG.setClockRate(4e8);
+        
+        % init the pg
+        PG.init();
+ 
+%%%%% CONFIGURE TRACKER %%%%%
+Tracker = TrackerCCNY();
+Tracker.hCounterAcquisition = handles.Counter;
+Tracker.hwLaserController = PG;
+Tracker.hImageAcquisition = handles.ImageAcquisition;
+Tracker.InitialStepSize = [0.005,0.005];
+Tracker.StepReductionFactor = [.5,.5];
+Tracker.MinimumStepSize = [0.0005,0.0005];
+Tracker.TrackingThreshold = [1500];
+Tracker.MaxIterations = [10];
+Tracker.LaserControlLine = 1; % AOM is line 1 
+Tracker.InitialPosition = handles.ImageAcquisition.CursorPosition;
+Tracker.MaxCursorPosition = [0.5,0.5];
+Tracker.MinCursorPosition = [-0.5,-0.5];
+
+handles.Tracker = Tracker;
+
+
+

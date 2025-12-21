@@ -1,0 +1,59 @@
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/wittelsbach/!svn/ver/69/trunk/Control%20Software/config
+END
+SetupAPT.m
+K 25
+svn:wc:ra_dav:version-url
+V 66
+/wittelsbach/!svn/ver/4/trunk/Control%20Software/config/SetupAPT.m
+END
+ccnyInitScript.m
+K 25
+svn:wc:ra_dav:version-url
+V 73
+/wittelsbach/!svn/ver/64/trunk/Control%20Software/config/ccnyInitScript.m
+END
+SetupNI.m
+K 25
+svn:wc:ra_dav:version-url
+V 65
+/wittelsbach/!svn/ver/4/trunk/Control%20Software/config/SetupNI.m
+END
+MIT_ImageAcquire_InitScript_Jan2010.m
+K 25
+svn:wc:ra_dav:version-url
+V 94
+/wittelsbach/!svn/ver/69/trunk/Control%20Software/config/MIT_ImageAcquire_InitScript_Jan2010.m
+END
+myInitScript_Jan2010.m
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/wittelsbach/!svn/ver/69/trunk/Control%20Software/config/myInitScript_Jan2010.m
+END
+MIT_ImageAcquire_InitScript.m
+K 25
+svn:wc:ra_dav:version-url
+V 86
+/wittelsbach/!svn/ver/10/trunk/Control%20Software/config/MIT_ImageAcquire_InitScript.m
+END
+myInitScript.m
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/wittelsbach/!svn/ver/10/trunk/Control%20Software/config/myInitScript.m
+END
+CCNY_ImageAcquire_InitScript.m
+K 25
+svn:wc:ra_dav:version-url
+V 87
+/wittelsbach/!svn/ver/67/trunk/Control%20Software/config/CCNY_ImageAcquire_InitScript.m
+END
+myInitScriptPB.m
+K 25
+svn:wc:ra_dav:version-url
+V 72
+/wittelsbach/!svn/ver/4/trunk/Control%20Software/config/myInitScriptPB.m
+END
