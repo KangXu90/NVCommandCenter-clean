@@ -131,30 +131,21 @@ end
 % init a fast counter for pulsing
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %         % configure NIDAQ Driver Instance
-        LibraryName = 'nidaqmx';
-        LibraryFilePath = 'C:\WINDOWS\system32\nicaiu.dll';
-        HeaderFilePath = 'C:\Program Files\National Instruments\NI-DAQ\DAQmx ANSI C Dev\include\NIDAQmx.h';
-% 
-%         %%
-% 
-        handles.Counter = NICounter(LibraryName,LibraryFilePath,HeaderFilePath);
+cfg = site_ccny();
+handles.options.cfg = cfg;  % (可选) 存起来，方便别处复用
 
-        %%
+handles.Counter = NICounter(cfg.ni.libraryName, cfg.ni.dll, cfg.ni.header);
 
-        handles.Counter.hwHandle.addCounterInLine('Dev1/ctr0','/Dev1/PFI0',1);
-        % add Counter Line
-        handles.Counter.hwHandle.addCounterInLine('Dev1/ctr1','/Dev1/PFI13',2);  
+handles.Counter.hwHandle.addCounterInLine(cfg.ni.counter.ctr0, cfg.ni.counter.pfi0, 1);
+handles.Counter.hwHandle.addCounterInLine(cfg.ni.counter.ctr1, cfg.ni.counter.pfi13, 2);
 
-        % add Clock Line
-        handles.Counter.hwHandle.addClockLine('Dev1/ctr1','/Dev1/PFI13');
-        % add Clock Line
-        handles.Counter.hwHandle.addClockLine('Ext','/Dev1/PFI0');
-        
-        handles.Counter.CounterInLine = 2;
-        handles.Counter.CounterClockLine = 2;
-        
-        % change the readtime to 1s;
-        handles.Counter.hwHandle.ReadTimeout = 1;
+handles.Counter.hwHandle.addClockLine(cfg.ni.clock.internal, cfg.ni.clock.pfi13);
+handles.Counter.hwHandle.addClockLine(cfg.ni.clock.externalName, cfg.ni.clock.externalPFI);
+
+handles.Counter.CounterInLine = 2;
+handles.Counter.CounterClockLine = 2;
+handles.Counter.hwHandle.ReadTimeout = 1;
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
