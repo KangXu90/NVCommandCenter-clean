@@ -46,10 +46,10 @@ cfg.ni.counter.pfi13 = sprintf('/%s/PFI13', cfg.ni.dev);   % alt TTL/clock line
 
 % Clock lines (if you use internal/external clock selection)
 cfg.ni.clock = struct();
-cfg.ni.clock.internal = cfg.ni.counter.ctr1;   % uses ctr1 as clock source in your scripts
-cfg.ni.clock.pfi13    = cfg.ni.counter.pfi13;  % corresponding PFI terminal
+cfg.ni.clock.internal = cfg.ni.counter.ctr1;   % uses ctr1 as clock source in your scripts, only for CounterAcquisition used for tracking and viewCounterAcquisition
+cfg.ni.clock.pfi13    = cfg.ni.counter.pfi13;  % corresponding PFI terminal, connect to gating of PulseBlaster
 cfg.ni.clock.externalName = 'Ext';
-cfg.ni.clock.externalPFI  = cfg.ni.counter.pfi0;
+cfg.ni.clock.externalPFI  = cfg.ni.counter.pfi0;% TTL from APD works like sample clock to count on gating of PB
 
 % Analog outputs for galvo (ImageAcquire)
 cfg.ni.ao = struct();
