@@ -50,13 +50,13 @@ classdef CounterAcquisition < handle
             obj.interfaceNIDAQ.StartTask('CounterAcq');
             
             % wait for it to start
-            % pause(0.1);
+              % pause(0.1); % this is needed if call by ViewCounterAcquisition 
             % first start the pulse train
             obj.interfaceNIDAQ.StartTask('PulseTrain');
             
             % wait for it to start
-            % pause(0.1);
-            
+              % pause(0.1);
+            % 
             
             % wait until the counter finishes
             obj.interfaceNIDAQ.WaitUntilTaskDone('CounterAcq');

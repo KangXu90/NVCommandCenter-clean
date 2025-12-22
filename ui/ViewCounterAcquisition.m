@@ -98,16 +98,17 @@ classdef ViewCounterAcquisition < handle
 
                 obj.hCounterAcquisition.DwellTime = Dwell;
                 obj.hCounterAcquisition.DutyCycle = DutyCycle;
-                obj.hCounterAcquisition.NumberOfSamples = NumberOfSamples;
+                obj.hCounterAcquisition.NumberOfSamples = NumberOfSamples+10;
 
             end
             
             for k=1:obj.hCounterAcquisition.LoopsUntilTimeOut
                 if ~obj.CounterStatus
+                    pause(0.1)
                     obj.hCounterAcquisition.GetCountsPerSecond();
                     obj.CounterHistory(end+1) = obj.hCounterAcquisition.CountsPerSecond;
                     set(obj.hText,'String',num2str(round(obj.hCounterAcquisition.CountsPerSecond)));
-                    
+                    pause(0.1)
                     % update plot
                     plot(obj.CounterHistory,'b-','Parent',obj.hTraceAxes);
                 else
