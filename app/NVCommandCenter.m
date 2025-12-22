@@ -346,7 +346,11 @@ switch Mode,
         myCounter.init();
 
         % 解析当前 sweep 的脉冲序列（保持你的接口）
-        sr_baseband = 1e9;                 % 你的基带采样率（与IQM插值、FREQ:RAST匹配）
+        if SG.Frequency1>2e9;
+        sr_baseband = 1.125e9;                 % 你的基带采样率（与IQM插值、FREQ:RAST匹配）
+        else
+        sr_baseband = 1e9;  
+        end
         handles.PulseSequence.SweepIndex = 1;
         [BinarySequence,tempSequence,AWGPSeq,TimeVector] = ProcessPulseSequence( ...
             handles.PulseSequence, 400e6, 'Instruction', sr_baseband);
@@ -363,18 +367,74 @@ switch Mode,
         % 监听器（保持原逻辑）
         handles.hListener  = addlistener(myCounter,'UpdateCounterData', ...
                                 @(src,eventdata)updateSingleDataPlot(handles,src,eventdata));
-        handles.hListener2 = addlistener(myCounter,'UpdateCounterProcData', ...
-                                @(src,eventdata)updateAvgDataPlotPulsed(handles,src,eventdata));
 
         promodeselec = get(handles.pnlProcessMode,'SelectedObject');
         promode      = get(promodeselec,'Tag');
+
+        % Set expType on Counter for pulsed processing
         switch promode
             case 'buttonRabiMode'
-                handles.hListener3 = addlistener(myCounter,'UpdateCounterProcData_Rabi', ...
-                                      @(src,eventdata)updateAvgDataPlotPulsedRabi(handles,src,eventdata));
+                myCounter.expType = 'Rabi';
             case 'buttonT2Mode'
-                handles.hListener3 = addlistener(myCounter,'UpdateCounterProcData_T2', ...
-                                      @(src,eventdata)updateAvgDataPlotPulsedT2(handles,src,eventdata));
+                myCounter.expType = 'T2';
+            otherwise
+                myCounter.expType = '';
+        end
+
+        if ~strcmp(handles.note, 'Pulsed/f-sweep')
+            % Pulse mode: use DataProcessor to update Counter.AveragedData / ProcessedData
+            handles.DataProcessor = DataProcessor(myCounter);
+
+            % Pre-create plot handles for incremental (inds) update (set-mode)
+            x = handles.TimeVector;
+            yInit = NaN(length(x), myCounter.NCounterGates);
+            axes(handles.axesAvgData);
+            handles.hAvgLines = plot(x, yInit, '.-');
+            handles.axesAvgData2.Visible = 'on';
+            handles.axesAvgData2.XAxisLocation = 'top';
+            handles.axesAvgData2.XDir = 'reverse';
+            handles.axesAvgData2.YAxisLocation = 'right';
+            handles.axesAvgData2.Color = 'none';
+
+            % Processed axis (contrast)
+            if strcmp(myCounter.expType,'Rabi')
+                SWP = handles.PulseSequence.Sweeps(1);
+                xProc = linspace(SWP.StartValue, SWP.StopValue, SWP.SweepPoints)';
+            else
+                xProc = handles.TimeVector;
+            end
+            yProcInit = NaN(length(xProc), myCounter.NCounterGates);
+            axes(handles.axesProcessData);
+            handles.hProcLines = plot(xProc, yProcInit, '.-');
+            handles.axesProcessData2.Visible = 'on';
+            handles.axesProcessData2.XAxisLocation = 'top';
+            handles.axesProcessData2.XDir = 'reverse';
+            handles.axesProcessData2.YAxisLocation = 'right';
+            handles.axesProcessData2.Color = 'none';
+% Listeners on DataProcessor (events carry inds + expType)
+            handles.hListener2 = addlistener(handles.DataProcessor,'UpdateCounterProcData', ...
+                                    @(src,eventdata)updateAvgDataPlotPulsed(handles,myCounter,eventdata));
+
+            switch myCounter.expType
+                case 'Rabi'
+                    handles.hListener3 = addlistener(handles.DataProcessor,'UpdateCounterProcData_Rabi', ...
+                                          @(src,eventdata)updateAvgDataPlotPulsedRabi(handles,myCounter,eventdata));
+                case 'T2'
+                    handles.hListener3 = addlistener(handles.DataProcessor,'UpdateCounterProcData_T2', ...
+                                          @(src,eventdata)updateAvgDataPlotPulsedT2(handles,myCounter,eventdata));
+            end
+        else
+            % Pulsed/f-sweep: keep legacy listeners on myCounter
+            handles.hListener2 = addlistener(myCounter,'UpdateCounterProcData', ...
+                                    @(src,eventdata)updateAvgDataPlotPulsed(handles,src,eventdata));
+            switch promode
+                case 'buttonRabiMode'
+                    handles.hListener3 = addlistener(myCounter,'UpdateCounterProcData_Rabi', ...
+                                          @(src,eventdata)updateAvgDataPlotPulsedRabi(handles,src,eventdata));
+                case 'buttonT2Mode'
+                    handles.hListener3 = addlistener(myCounter,'UpdateCounterProcData_T2', ...
+                                          @(src,eventdata)updateAvgDataPlotPulsedT2(handles,src,eventdata));
+            end
         end
         guidata(hObject,handles);
 
@@ -390,7 +450,7 @@ switch Mode,
         % ======================================================
         % 【优化1】AWG 一次性初始化（不要在循环里反复配置）
         % ======================================================
-        sr_baseband = 1e9;                 % 你的基带采样率（与IQM插值、FREQ:RAST匹配）
+        samplerate = int2str(8 * sr_baseband);                 % 你的基带采样率（与IQM插值、FREQ:RAST匹配）
         AWG.Connect();
         for ch = 1
             AWG.Channel = ch; AWG.selectChannel();
@@ -402,7 +462,7 @@ switch Mode,
             AWG.SendCmd(':TRIG:SOUR:ENAB TRG1');
             AWG.SendCmd(':TRIG:STATE ON');
             AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
-            AWG.SendCmd(':FREQ:RAST 8e9'); % 与 sr_baseband * 插值 一致
+            AWG.SendCmd(':FREQ:RAST', samplerate); % 与 sr_baseband * 插值 一致
             % AWG.SendCmd(':SOUR:VOLT 0.8'); % 【优化3】把幅度交给硬件，避免后续整体缩放
             AWG.setRFOn();
 
@@ -412,27 +472,27 @@ switch Mode,
             % AWG.SendCmd(':MARK:VOLT:OFFS 0.5');
             % AWG.SendCmd(':MARK ON');
         end
-        for ch = 3
-            AWG.Channel = ch; AWG.selectChannel();
-            AWG.SendCmd(':TRAC:DEL:ALL');
-            AWG.SendCmd(':IQM ONE');       % 例：DUC ONE（1.25Gsps），与设备设置保持一致
-            AWG.SendCmd(':INIT:CONT OFF');
-            AWG.SendCmd(':TRIG:SEL TRG1');
-            AWG.SendCmd(':TRIG:LEV 0.5');
-            AWG.SendCmd(':TRIG:SOUR:ENAB TRG1');
-            AWG.SendCmd(':TRIG:STATE ON');
-            AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
-            AWG.SendCmd(':FREQ:RAST 8e9'); % 与 sr_baseband * 插值 一致
-            % AWG.SendCmd(':SOUR:VOLT 0.8'); % 【优化3】把幅度交给硬件，避免后续整体缩放
-            AWG.setRFOn();
-
-            % 【优化6】启用 Marker1 输出（一次性设置）
-            AWG.SendCmd(':MARK:SEL 1');
-            AWG.SendCmd(':MARK:VOLT:PTOP 1');
-            AWG.SendCmd(':MARK:VOLT:OFFS 0.5');
-            AWG.SendCmd(':MARK ON');
-        end
-        
+        % for ch = 3
+        %     AWG.Channel = ch; AWG.selectChannel();
+        %     AWG.SendCmd(':TRAC:DEL:ALL');
+        %     AWG.SendCmd(':IQM ONE');       % 例：DUC ONE（1.25Gsps），与设备设置保持一致
+        %     AWG.SendCmd(':INIT:CONT OFF');
+        %     AWG.SendCmd(':TRIG:SEL TRG1');
+        %     AWG.SendCmd(':TRIG:LEV 0.5');
+        %     AWG.SendCmd(':TRIG:SOUR:ENAB TRG1');
+        %     AWG.SendCmd(':TRIG:STATE ON');
+        %     AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
+        %     AWG.SendCmd(':FREQ:RAST 8e9'); % 与 sr_baseband * 插值 一致
+        %     % AWG.SendCmd(':SOUR:VOLT 0.8'); % 【优化3】把幅度交给硬件，避免后续整体缩放
+        %     AWG.setRFOn();
+        % 
+        %     % 【优化6】启用 Marker1 输出（一次性设置）
+        %     AWG.SendCmd(':MARK:SEL 1');
+        %     AWG.SendCmd(':MARK:VOLT:PTOP 1');
+        %     AWG.SendCmd(':MARK:VOLT:OFFS 0.5');
+        %     AWG.SendCmd(':MARK ON');
+        % end
+        % 
         handles.PulseSequence.SweepIndex = 1;
 
 
@@ -854,13 +914,25 @@ while k<=Averages
                     if handles.options.spinNoiseAvg,
                         myCounter.saveRawDataPulsed(handles.PulseSequence.getSweepIndex,k,handles.spinNoiseFilePath);
                     end
-                      myCounter.processRawDataPulsed(handles.PulseSequence.getSweepIndex);
-                    switch promode
-                        case 'buttonRabiMode'
-                             myCounter.processRawDataPulsed_Rabi(handles.PulseSequence.getSweepIndex);
-                        case 'buttonT2Mode'
-                            myCounter.processRawDataPulsed_T2(handles.PulseSequence.getSweepIndex);
-                    end
+                      % Pulse-mode processing moved to DataProcessor (NICounter stops at streamCounts)
+                      if ~strcmp(handles.note, 'Pulsed/f-sweep')
+                          handles.DataProcessor.processRawDataPulsed(handles.PulseSequence.getSweepIndex);
+                          switch myCounter.expType
+                              case 'Rabi'
+                                  handles.DataProcessor.processRawDataPulsed_Rabi(handles.PulseSequence.getSweepIndex);
+                              case 'T2'
+                                  handles.DataProcessor.processRawDataPulsed_T2(handles.PulseSequence.getSweepIndex);
+                          end
+                      else
+                          % Keep legacy processing path for Pulsed/f-sweep (unchanged)
+                          myCounter.processRawDataPulsed(handles.PulseSequence.getSweepIndex);
+                          switch promode
+                              case 'buttonRabiMode'
+                                  myCounter.processRawDataPulsed_Rabi(handles.PulseSequence.getSweepIndex);
+                              case 'buttonT2Mode'
+                                  myCounter.processRawDataPulsed_T2(handles.PulseSequence.getSweepIndex);
+                          end
+                      end
                    
                     
                     myCounter.disarm();
@@ -1067,16 +1139,30 @@ if strcmp(handles.note, 'Pulsed/f-sweep')
         handles.axesAvgData2.Color = 'none';
     end
 else
-    x = handles.TimeVector;
-    data = src.AveragedData;
-    plot(x,data,'.-','Parent',handles.axesAvgData);
-    handles.axesAvgData2.Visible = 'on';
+    % Pulse mode: incremental update (set-mode) using inds from eventdata
+    if nargin >= 3 && ~isempty(eventdata) && isprop(eventdata,'inds')
+        inds = eventdata.inds;
+    else
+        inds = [];
+    end
 
-    handles.axesAvgData2.XAxisLocation = 'top';
-    handles.axesAvgData2.XDir = 'reverse';
-    handles.axesAvgData2.YAxisLocation = 'right';
-    handles.axesAvgData2.Color = 'none';
+    % Update AveragedData lines (axesAvgData)
+    if isfield(handles,'hAvgLines') && ~isempty(inds)
+        for jj = 1:numel(handles.hAvgLines)
+            y = get(handles.hAvgLines(jj),'YData');
+            y(inds) = src.AveragedData(inds,jj);
+            set(handles.hAvgLines(jj),'YData',y);
+        end
+    end
 
+    % Update ProcessedData lines (axesProcessData) if handles exist
+    if isfield(handles,'hProcLines') && ~isempty(inds)
+        for jj = 1:numel(handles.hProcLines)
+            y = get(handles.hProcLines(jj),'YData');
+            y(inds) = src.ProcessedData(inds,jj);
+            set(handles.hProcLines(jj),'YData',y);
+        end
+    end
 end
 
 drawnow();
@@ -1091,10 +1177,25 @@ if numel(handles.PulseSequence.Sweeps) == 1,
     % plot(x,data,'.-','Parent',handles.axesProcessData);
     % SWP = handles.PulseSequence.Sweeps(1);
     % SWPpts = SWP.SweepPoints;
-    x = handles.TimeVector;
-    data = src.ProcessedData;
-    plot(x,data,'.-','Parent',handles.axesProcessData);
-    handles.axesProcessData2.XAxisLocation = 'top';
+    % set-mode incremental update using inds from eventdata (pulse mode)
+    if nargin >= 3 && ~isempty(eventdata) && isprop(eventdata,'inds')
+        inds = eventdata.inds;
+    else
+        inds = [];
+    end
+
+    if isfield(handles,'hProcLines') && ~isempty(inds)
+        for jj = 1:numel(handles.hProcLines)
+            y = get(handles.hProcLines(jj),'YData');
+            y(inds) = src.ProcessedData(inds,jj);
+            set(handles.hProcLines(jj),'YData',y);
+        end
+    else
+        x = handles.TimeVector;
+        data = src.ProcessedData;
+        plot(x,data,'.-','Parent',handles.axesProcessData);
+    end
+handles.axesProcessData2.XAxisLocation = 'top';
     handles.axesProcessData2.XDir = 'reverse';
     handles.axesProcessData2.YAxisLocation = 'right';
     handles.axesProcessData2.Color = 'none';
@@ -1135,18 +1236,32 @@ if strcmp(handles.note, 'Pulsed/f-sweep')
         handles.axesProcessData2.YAxisLocation = 'right';
         handles.axesProcessData2.Color = 'none';
     end
+
 else
-    SWP = handles.PulseSequence.Sweeps(1);
-    SWPpts = SWP.SweepPoints;
-    data = src.ProcessedData;
-    x = linspace(SWP.StartValue,SWP.StopValue,SWPpts)';
-    plot(x,data,'.-','Parent',handles.axesProcessData);
-    handles.axesProcessData2.Visible = 'on';
-        handles.axesProcessData2.XAxisLocation = 'top';
-        handles.axesProcessData2.XDir = 'reverse';
-        handles.axesProcessData2.YAxisLocation = 'right';
-        handles.axesProcessData2.Color = 'none';
+    % Pulse mode: incremental update (set-mode) using inds from eventdata
+    if nargin >= 3 && ~isempty(eventdata) && isprop(eventdata,'inds')
+        inds = eventdata.inds;
+    else
+        inds = [];
+    end
+
+    % Update processed lines if present
+    if isfield(handles,'hProcLines') && ~isempty(inds)
+        for jj = 1:numel(handles.hProcLines)
+            y = get(handles.hProcLines(jj),'YData');
+            y(inds) = src.ProcessedData(inds,jj);
+            set(handles.hProcLines(jj),'YData',y);
+        end
+    else
+        % Fallback (no precreated handles): do full plot
+        data = src.ProcessedData;
+        SWP = handles.PulseSequence.Sweeps(1);
+        SWPpts = SWP.SweepPoints;
+        x = linspace(SWP.StartValue,SWP.StopValue,SWPpts)';
+        plot(x,data,'.-','Parent',handles.axesProcessData);
+    end
 end
+
 drawnow();
 
 

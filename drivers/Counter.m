@@ -16,6 +16,7 @@ classdef Counter < handle
         bSaveProcessedData
         hwHandle
         hasAborted = 0
+        expType = ''; % pulsed experiment type: 'Rabi' | 'T2' | ''
     end
     
     methods

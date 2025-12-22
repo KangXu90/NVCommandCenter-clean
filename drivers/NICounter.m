@@ -142,21 +142,6 @@ classdef NICounter < Counter
             
             notify(obj,'UpdateCounterProcData_T2');
         end
-        function [obj] = processRawDataPulsedFSweep(obj,inds)
-            
-            % first, unpack the counters
-            % check to see if we missed a count and timed out
-            if obj.RawDataIndex == obj.NCounterGates*obj.NSamples
-                AvgCounts = mean(double(reshape(obj.RawData,obj.NCounterGates,obj.NSamples)),2)';
-                if(isnan(obj.AveragedData(inds,:)))
-                    obj.AveragedData(inds,:) = AvgCounts;
-                else
-                    obj.AveragedData(inds,:) = (obj.AveragedData(inds,:)*(obj.AvgIndex -1) + AvgCounts)/obj.AvgIndex;
-                end
-            end
-            
-            notify(obj,'UpdateCounterProcData');
-        end
         
         function [] = saveRawDataPulsed(obj,SweepIndex,AverageIndex,filepath)
             if length(obj.RawData)== obj.NCounterGates*obj.NSamples
