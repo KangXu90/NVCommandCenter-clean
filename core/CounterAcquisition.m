@@ -9,9 +9,9 @@ classdef CounterAcquisition < handle
     
     properties
         interfaceNIDAQ;   % handle to hardware interface for counter
-        DwellTime;
+        DwellTime = 0.005;
         DutyCycle = 0.5;
-        NumberOfSamples;
+        NumberOfSamples = 11;
         CounterData;
         CountsPerSecond;
         LoopsUntilTimeOut;
@@ -45,18 +45,18 @@ classdef CounterAcquisition < handle
             
             obj.SetCounter();
             obj.SetPulseTrain();
-            
-            % first start the pulse train
-            obj.interfaceNIDAQ.StartTask('PulseTrain');
-            
-            % wait for it to start
-            pause(0.1);
-            
+
             % start the counters and the voltages
             obj.interfaceNIDAQ.StartTask('CounterAcq');
             
             % wait for it to start
-            pause(0.1);
+            % pause(0.1);
+            % first start the pulse train
+            obj.interfaceNIDAQ.StartTask('PulseTrain');
+            
+            % wait for it to start
+            % pause(0.1);
+            
             
             % wait until the counter finishes
             obj.interfaceNIDAQ.WaitUntilTaskDone('CounterAcq');

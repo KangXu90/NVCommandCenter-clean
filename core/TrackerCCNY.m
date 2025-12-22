@@ -19,7 +19,7 @@ classdef TrackerCCNY < Tracker
 
             % next do the counter acquisition
            	obj.hCounterAcquisition.GetCountsPerSecond();
-            counts = obj.hCounterAcquisition.CountsPerSecond();
+            counts = obj.hCounterAcquisition.CountsPerSecond;
             
             
             % turn off the laser
@@ -34,13 +34,6 @@ classdef TrackerCCNY < Tracker
             [counts] = obj.GetCountsCurPos();
         end
         
-        function [counts] = GetCountsAtPos2D(obj,Pos)
-            counts = 0;
-            obj.hImageAcquisition.CursorPosition = Pos;
-
-            obj.hImageAcquisition.SetCursor2D();% added by kang for 2D scanning
-            [counts] = obj.GetCountsCurPos();
-        end
         
         function [] = laserOn(obj)
             obj.hwLaserController.stop();
@@ -161,7 +154,7 @@ classdef TrackerCCNY < Tracker
                     for k=1:7
                         thisPos = Nearest(k,:);
                         NNCounts(k) =  GetCountsAtPos(obj,thisPos);
-                        NNCounts(k) =  GetCountsAtPos2D(obj,thisPos); % modified by kang to realize 2D scan
+                        % NNCounts(k) =  GetCountsAtPos2D(obj,thisPos); % modified by kang to realize 2D scan
                     end
                     
                     % throw event that counts have been updated;
