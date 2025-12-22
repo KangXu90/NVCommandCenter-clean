@@ -24,7 +24,7 @@ function varargout = NVCommandCenter(varargin)
 
 % Edit the above text to modify the response to help NVCommandCenter
 
-% Last Modified by GUIDE v2.5 02-Sep-2024 19:55:54
+% Last Modified by GUIDE v2.5 22-Dec-2025 16:21:01
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -280,7 +280,12 @@ myCounter.AveragedData = [];
 
 
 % Clear the average and current scan axes
-% cla(handles.axesRawData);
+if isfield(handles,'axesRawData') && ishandle(handles.axesRawData)
+    cla(handles.axesRawData);
+end
+handles.hRawDataPlot = [];
+handles.rawPlotLastT = [];
+
 cla(handles.axesAvgData);
 cla(handles.axesAvgData2);
 
@@ -365,6 +370,9 @@ switch Mode,
         handles.TimeVector = TimeVector;
 
         % 监听器（保持原逻辑）
+
+        % handles.hRawDataPlot = plot(... 1:N, nan(1,N))
+
         handles.hListener  = addlistener(myCounter,'UpdateCounterData', ...
             @(src,eventdata)updateSingleDataPlot(handles,src,eventdata));
 
@@ -1186,9 +1194,38 @@ end
 guidata(hObject,handles); % update handles object
 
 function updateSingleDataPlot(handles,src,eventdata)
-% set(handles.hRawDataPlot,'YData',src.RawData);
-% %plot(src.RawData,'b-','Parent',handles.axesRawData);
-% drawnow();
+% Live raw counter plot (optional). This listener can be high-rate, so we:
+%  1) read latest handles via guidata (checkbox can change after listener creation)
+%  2) throttle draw rate (rawPlotMinPeriod)
+%  3) decimate points (rawPlotDecimation)
+%
+% NOTE: this is for debugging/monitoring only; it does not affect processed plots.
+
+% Always fetch latest handles (the listener captures an old handles snapshot)
+    handles = guidata(hObject);
+    if ~handles.ShowRaw
+        return;
+    end
+    if isempty(handles.hRawDataPlot) || ~isvalid(handles.hRawDataPlot)
+        return;
+    end
+
+    % 限速：每 50 次通知更新一次（你可以调到 20/100）
+    persistent k
+    if isempty(k), k = 0; end
+    k = k + 1;
+    if mod(k, 50) ~= 0
+        return;
+    end
+
+    n = src.RawDataIndex;
+    if n <= 0, return; end
+
+    % 更新已填充部分
+    set(handles.hRawDataPlot, 'XData', 1:n, 'YData', src.RawData(1:n));
+    drawnow limitrate nocallbacks;
+
+
 
 function updateAvgDataPlot(handles,src,eventdata)
 
@@ -3300,3 +3337,49 @@ function popupmenuTempelate_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+
+% --- Executes on button press in chkShowRaw.
+function chkShowRaw_Callback(hObject, eventdata, handles)
+% hObject    handle to chkShowRaw (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+%
+% Toggle live raw plot. Raw data exists only during a running experiment.
+
+val = get(hObject,'Value');
+
+% Defaults (you can tune)
+if ~isfield(handles,'rawPlotMinPeriod') || isempty(handles.rawPlotMinPeriod)
+    handles.rawPlotMinPeriod = 0.05; % seconds
+end
+if ~isfield(handles,'rawPlotDecimation') || isempty(handles.rawPlotDecimation)
+    handles.rawPlotDecimation = 5;   % plot every Nth point
+end
+
+if isfield(handles,'axesRawData') && ishandle(handles.axesRawData)
+    if val
+        % Prepare for live updates
+        cla(handles.axesRawData);
+        handles.hRawDataPlot = [];
+        handles.rawPlotLastT = [];
+    else
+        % Optionally clear when turning off
+        cla(handles.axesRawData);
+    end
+end
+
+guidata(hObject, handles);
+
+function handles = initRawPlot(handles)
+    ax = handles.hRawDataPlot;  % 你新加的 axes 的 Tag
+
+    cla(ax);
+
+    % raw 轴长度：这一次采集的一整段 raw buffer
+    N = handles.myCounter.NSamples * handles.myCounter.NCounterGates;
+
+    handles.hRawDataPlot = plot(ax, 1:N, nan(1,N), '-');
+    xlabel(ax, 'raw sample index');
+    ylabel(ax, 'counts');
+    xlim(ax, [1 N]);
