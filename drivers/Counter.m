@@ -60,9 +60,9 @@ classdef Counter < handle
     
     events
         UpdateCounterData
-        UpdateCounterProcData
-        UpdateCounterProcData_Rabi
-        UpdateCounterProcData_T2
+        % UpdateCounterProcData
+        % UpdateCounterProcData_Rabi
+        % UpdateCounterProcData_T2
     end
     
 end

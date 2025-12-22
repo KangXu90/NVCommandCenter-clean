@@ -44,17 +44,15 @@ classdef DataProcessor < handle
         function processRawDataPulsed_Rabi(obj, inds)
             c = obj.CounterRef;
 
-            if c.RawDataIndex == c.NCounterGates * c.NSamples
-                AvgCounts = mean(double(reshape(c.RawData, c.NCounterGates, c.NSamples)), 2)';
 
-                AvgCountsContrast = AvgCounts(2) / AvgCounts(1);
+            AvgCountsContrast = c.AveragedData(inds,2) / c.AveragedData(inds,1);
 
-                if isnan(c.ProcessedData(inds,:))
-                    c.ProcessedData(inds,:) = AvgCountsContrast;
-                else
-                    c.ProcessedData(inds,:) = (c.ProcessedData(inds,:) * (c.AvgIndex - 1) + AvgCountsContrast) / c.AvgIndex;
-                end
+            if isnan(c.ProcessedData(inds,:))
+                c.ProcessedData(inds,:) = AvgCountsContrast;
+            else
+                c.ProcessedData(inds,:) = (c.ProcessedData(inds,:) * (c.AvgIndex - 1) + AvgCountsContrast) / c.AvgIndex;
             end
+
 
             notify(obj, 'UpdateCounterProcData_Rabi', ProcessedDataEventData(inds, c.expType));
         end
@@ -62,17 +60,14 @@ classdef DataProcessor < handle
         function processRawDataPulsed_T2(obj, inds)
             c = obj.CounterRef;
 
-            if c.RawDataIndex == c.NCounterGates * c.NSamples
-                AvgCounts = mean(double(reshape(c.RawData, c.NCounterGates, c.NSamples)), 2)';
+            AvgCountsContrast = (c.AveragedData(inds,2) - c.AveragedData(inds,3)) ./ (c.AveragedData(inds,2) + c.AveragedData(inds,3));
 
-                AvgCountsContrast = (AvgCounts(2) - AvgCounts(3)) ./ (AvgCounts(2) + AvgCounts(3));
-
-                if isnan(c.ProcessedData(inds,:))
-                    c.ProcessedData(inds,:) = AvgCountsContrast;
-                else
-                    c.ProcessedData(inds,:) = (c.ProcessedData(inds,:) * (c.AvgIndex - 1) + AvgCountsContrast) / c.AvgIndex;
-                end
+            if isnan(c.ProcessedData(inds,:))
+                c.ProcessedData(inds,:) = AvgCountsContrast;
+            else
+                c.ProcessedData(inds,:) = (c.ProcessedData(inds,:) * (c.AvgIndex - 1) + AvgCountsContrast) / c.AvgIndex;
             end
+
 
             notify(obj, 'UpdateCounterProcData_T2', ProcessedDataEventData(inds, c.expType));
         end

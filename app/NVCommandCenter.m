@@ -1614,7 +1614,7 @@ if OK,
     [hObject,handles] = feval(handles.initScript(1:end-2),hObject,handles);
     SetStatus(handles,sprintf('Init Script (%s) Run',handles.initScript));
     guidata(hObject,handles);
-    rmpath(fullfile(pwd,'config'));
+    % rmpath(fullfile(pwd,'config'));
 end
 
 % --------------------------------------------------------------------
@@ -1668,7 +1668,7 @@ if ispref('nv','CCInitScript'),
     addpath('./config');
     handles = feval(script(1:end-2),handles);
     SetStatus(handles,sprintf('Init Script (%s) Run',script));
-    rmpath('./config');
+    % rmpath('./config');
 else
     SetStatus(handles,'Please run init script.');
 end

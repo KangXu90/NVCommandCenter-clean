@@ -76,73 +76,23 @@ classdef NICounter < Counter
                                                 
         end
         
-        function [obj] =  processRawDataCW(obj)
-            
-            % check to make sure RawData run was complete (ie not aborted)
-            if length(obj.AveragedData) == length(obj.RawData)
-                if(isnan(obj.AveragedData))
-                    obj.AveragedData = double(obj.RawData);
-                else
-                    obj.AveragedData = (obj.AveragedData*(obj.AvgIndex -1) + double(obj.RawData))/obj.AvgIndex;
-                end
-            end
-            
-            % resest RawData matrix
-            obj.RawData = [];
-            notify(obj,'UpdateCounterProcData');
-        end
-        
-        function [obj] = processRawDataPulsed(obj,inds)
-            
-            % first, unpack the counters
-            % check to see if we missed a count and timed out
-            if obj.RawDataIndex == obj.NCounterGates*obj.NSamples
-                AvgCounts = mean(double(reshape(obj.RawData,obj.NCounterGates,obj.NSamples)),2)';
-                if(isnan(obj.AveragedData(inds,:)))
-                    obj.AveragedData(inds,:) = AvgCounts;
-                else
-                    obj.AveragedData(inds,:) = (obj.AveragedData(inds,:)*(obj.AvgIndex -1) + AvgCounts)/obj.AvgIndex;
-                end
-            end
-            
-            notify(obj,'UpdateCounterProcData');
-        end
-        function [obj] = processRawDataPulsed_Rabi(obj,inds)
-            
-            %             first, unpack the counters
-            %             check to see if we missed a count and timed out
-            if obj.RawDataIndex == obj.NCounterGates*obj.NSamples
-                AvgCounts = mean(double(reshape(obj.RawData,obj.NCounterGates,obj.NSamples)),2)';
-                AvgCountsContrast = AvgCounts(2)/AvgCounts(1);
-                if(isnan(obj.ProcessedData(inds,:)))
-                    obj.ProcessedData(inds,:) = AvgCountsContrast;
-                else
-                    obj.ProcessedData(inds,:) = (obj.ProcessedData(inds,:)*(obj.AvgIndex -1) + AvgCountsContrast)/obj.AvgIndex;
-                end
-            end
-            
-            
-            notify(obj,'UpdateCounterProcData_Rabi');
-        end
-        function [obj] = processRawDataPulsed_T2(obj,inds)
-            
-            %             first, unpack the counters
-            %             check to see if we missed a count and timed out
-            if obj.RawDataIndex == obj.NCounterGates*obj.NSamples
-                AvgCounts = mean(double(reshape(obj.RawData,obj.NCounterGates,obj.NSamples)),2)';
-%                 AvgCountsContrast = (AvgCounts(1)-AvgCounts(4))/AvgCounts(1)-(AvgCounts(3)-AvgCounts(2))/AvgCounts(3);
-                AvgCountsContrast = (AvgCounts(2)-AvgCounts(3))./ (AvgCounts(2)+ AvgCounts(3));
-                if(isnan(obj.ProcessedData(inds,:)))
-                    obj.ProcessedData(inds,:) = AvgCountsContrast;
-                else
-                    obj.ProcessedData(inds,:) = (obj.ProcessedData(inds,:)*(obj.AvgIndex -1) + AvgCountsContrast)/obj.AvgIndex;
-                end
-            end
-            
-            
-            notify(obj,'UpdateCounterProcData_T2');
-        end
-        
+        % function [obj] =  processRawDataCW(obj)
+        % 
+        %     % check to make sure RawData run was complete (ie not aborted)
+        %     if length(obj.AveragedData) == length(obj.RawData)
+        %         if(isnan(obj.AveragedData))
+        %             obj.AveragedData = double(obj.RawData);
+        %         else
+        %             obj.AveragedData = (obj.AveragedData*(obj.AvgIndex -1) + double(obj.RawData))/obj.AvgIndex;
+        %         end
+        %     end
+        % 
+        %     % resest RawData matrix
+        %     obj.RawData = [];
+        %     notify(obj,'UpdateCounterProcData');
+        % end
+        % 
+    
         function [] = saveRawDataPulsed(obj,SweepIndex,AverageIndex,filepath)
             if length(obj.RawData)== obj.NCounterGates*obj.NSamples
                 Q = reshape(obj.RawData,obj.NCounterGates,obj.NSamples)';
