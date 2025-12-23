@@ -1076,7 +1076,7 @@ end % end averages
 
 
 PG.stop();
-PG.close();
+PG.init();
 AWG.Connect();
 AWG.SendCmd('INST:CHAN 1');
 AWG.setRFOff;
@@ -1659,7 +1659,7 @@ handles.TEProteusInst.Disconnect();
 %stop Counter
 handles.Counter.abort();
 % stop PG
-handles.PulseGenerator.abort();
+handles.PulseGenerator.init();
 % % stop AWG ouptput
 % handles.TekAWGController.open();
 % handles.TekAWGController.stop();
