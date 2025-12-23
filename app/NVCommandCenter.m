@@ -454,12 +454,7 @@ switch Mode,
             AWG.setRFOn();
 
             % 【优化6】启用 Marker1 输出（一次性设置）
-            % AWG.SendCmd(':MARK:SEL 1');
-            % AWG.SendCmd(':MARK:VOLT:PTOP 1.0');
-            % AWG.SendCmd(':MARK:VOLT:OFFS 0.5');
-            % AWG.SendCmd(':MARK ON');
         end
-        % for ch = 3
         %     AWG.Channel = ch; AWG.selectChannel();
         %     AWG.SendCmd(':TRAC:DEL:ALL');
         %     AWG.SendCmd(':IQM ONE');       % 例：DUC ONE（1.25Gsps），与设备设置保持一致
@@ -474,10 +469,6 @@ switch Mode,
         %     AWG.setRFOn();
         %
         %     % 【优化6】启用 Marker1 输出（一次性设置）
-        %     AWG.SendCmd(':MARK:SEL 1');
-        %     AWG.SendCmd(':MARK:VOLT:PTOP 1');
-        %     AWG.SendCmd(':MARK:VOLT:OFFS 0.5');
-        %     AWG.SendCmd(':MARK ON');
         % end
 
         handles.PulseSequence.SweepIndex = 1;
@@ -624,7 +615,6 @@ switch Mode,
             save(handles.spinNoiseFilePath,'M'); clear M;
         end
 
-        % -------- 3) 一次性生成并下发 AWG 波形 + Marker --------
         sr_baseband = 1.125e9;    % DUC ONE 模式的基带采样率（保持你原设定）
         % 解析当前 sweep 的脉冲序列（保持你的接口）
         handles.PulseSequence.SweepIndex = 1;
@@ -632,18 +622,10 @@ switch Mode,
             handles.PulseSequence, 400e6, 'Instruction', sr_baseband);
 
         % ======================================================
-        % 生成并下发 I/Q + Marker（对应优化3/4/5/6）
         % ======================================================
-        for m = 1:size(AWGPSeq,1)
-
-            % 通道映射：第1行→CH1，第2行→CH3（按你原逻辑）
-            if m == 1
-                hwCh = 1; chanIdxForParams = 3;
-            else
-                hwCh = 3; chanIdxForParams = 4;
-            end
+        for m = 1:min(1,size(AWGPSeq,1))% Channel 1 only (simplified)
+            hwCh = 1; chanIdxForParams = 3;
             AWG.Channel = hwCh; AWG.selectChannel();
-
             % --- 找边沿，得到 [start_indices, end_indices] ---
             v = int16(AWGPSeq(m,:));
             edge = diff([0, v, 0]);
@@ -690,19 +672,7 @@ switch Mode,
             % 下发波形到段1（保持你的API）
             SendWfmToProteus(AWG, hwCh, 1, w, 16);
 
-            % % --- 【优化6】生成并下发 Marker-1 字节流 ---
-            % segLen = numel(w) / 2;     % I/Q 交织 → 基带采样点数
-            % mkr1   = zeros(1, segLen, 'uint8');
-            % if ~isempty(start_idx)
-            %     for z = 1:numel(start_idx)
-            %         s = max(1, start_idx(z));
-            %         e = min(segLen, end_idx(z));
-            %         mkr1(s:e) = 1;
-            %     end
-            % end
-            % mkr2  = zeros(size(mkr1), 'uint8');
-            % myMkr = AWG.FormatMkr2(16, mkr1, mkr2);
-            % SendMkrToProteus(AWG, myMkr);
+            %
         end
 
         % -------- 4) 一次性 AWG 通道与触发设置 --------
@@ -884,18 +854,10 @@ while k<=Averages
                 handles.TimeVector = TimeVector;
 
                 % ======================================================
-                % 生成并下发 I/Q + Marker（对应优化3/4/5/6）
                 % ======================================================
-                for m = 1:size(AWGPSeq,1)
-
-                    % 通道映射：第1行→CH1，第2行→CH3（按你原逻辑）
-                    if m == 1
-                        hwCh = 1; chanIdxForParams = 3;
-                    else
-                        hwCh = 3; chanIdxForParams = 4;
-                    end
-                    AWG.Channel = hwCh; AWG.selectChannel();
-
+                for m = 1:min(1,size(AWGPSeq,1))% Channel 1 only (simplified)
+            hwCh = 1; chanIdxForParams = 3;
+            AWG.Channel = hwCh; AWG.selectChannel();
                     % --- 找边沿，得到 [start_indices, end_indices] ---
                     v = int16(AWGPSeq(m,:));
                     edge = diff([0, v, 0]);
@@ -946,30 +908,12 @@ while k<=Averages
 
                     % 下发波形到段1（保持你的API）
                     SendWfmToProteus(AWG, hwCh, 1, w, 16);
-
-                    % --- 【优化6】生成并下发 Marker-1 字节流 ---
-                    segLen = numel(w) / 2;     % I/Q 交织 → 基带采样点数
-                    mkr1   = zeros(1, segLen, 'uint8');
-                    padDuration = 3e-6;
-                    padSamp = max(1, round(padDuration * sr_baseband));   % 1 us -> 样点数
-
-                    if ~isempty(start_idx)
-                        for z = 1:numel(start_idx)
-                            s = max(1, start_idx(z) - padSamp);
-                            e = min(segLen, end_idx(z) + padSamp);
-                            mkr1(s:e) = 1; % extend the maker widness
-                        end
-                    end
-                    mkr2  = zeros(size(mkr1), 'uint8');
-                    myMkr = AWG.FormatMkr2(16, mkr1, mkr2);
-                    SendMkrToProteus(AWG, myMkr);
                 end
 
 
 
                 % 选择段并确保RF ON（初始化里已做，一般不必重复）
                 AWG.SendCmd('INST:CHAN 1'); AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
-                AWG.SendCmd('INST:CHAN 3'); AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
                 %Setup the rawdata array
                 myCounter.RawData = zeros(myCounter.NSamples*myCounter.NCounterGates,1);
                 myCounter.RawDataIndex = 0;
@@ -1136,7 +1080,6 @@ PG.close();
 AWG.Connect();
 AWG.SendCmd('INST:CHAN 1');
 AWG.setRFOff;
-AWG.SendCmd('INST:CHAN 3');
 AWG.setRFOff;
 % AWG.setRFOff();
 AWG.Disconnect();
