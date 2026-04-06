@@ -495,7 +495,7 @@ switch Mode,
         myCounter.DataDims       = inds;
         myCounter.NAverages      = Averages;
         myCounter.NCounterGates  = CounterGates;
-        myCounter.MaxCounts      = 1000;
+        myCounter.MaxCounts      = 10000;
         myCounter.init();
 
         % 监听（Pulsed/f-sweep：使用 DataProcessor 做处理 + set-mode 增量更新）
@@ -525,10 +525,12 @@ switch Mode,
 
         nG = myCounter.NCounterGates;
 
-        handles.axesAvgData2.Visible = 'off';
-        handles.axesProcessData2.Visible = 'off';
+        % handles.axesAvgData2.Visible = 'off';
+        % handles.axesProcessData2.Visible = 'off';
 
         if handles.TEProteusInst.SweepZoneState1 && ~handles.TEProteusInst.SweepZoneState2
+            handles.axesAvgData2.Visible = 'off';
+            handles.axesProcessData2.Visible = 'off';
             x1 = handles.specialVec(1:handles.TEProteusInst.SweepPoints1);
             yInit = NaN(numel(x1), nG);
 
@@ -541,55 +543,68 @@ switch Mode,
             handles.hProcLinesFS2 = [];
 
         elseif handles.TEProteusInst.SweepZoneState2 && ~handles.TEProteusInst.SweepZoneState1
+            handles.axesAvgData.Visible = 'off';
+            handles.axesProcessData.Visible = 'off';
+
             x2 = handles.specialVec(1:handles.TEProteusInst.SweepPoints2);
             yInit = NaN(numel(x2), nG);
 
-            handles.axesAvgData2.Visible = 'on';
             handles.axesAvgData2.XAxisLocation = 'top';
             handles.axesAvgData2.XDir = 'reverse';
             handles.axesAvgData2.YAxisLocation = 'right';
-            handles.axesAvgData2.Color = 'none';
             axes(handles.axesAvgData2);
             handles.hAvgLinesFS2 = plot(x2, yInit, '.-');
             handles.hAvgLinesFS1 = [];
 
-            handles.axesProcessData2.Visible = 'on';
             handles.axesProcessData2.XAxisLocation = 'top';
             handles.axesProcessData2.XDir = 'reverse';
             handles.axesProcessData2.YAxisLocation = 'right';
-            handles.axesProcessData2.Color = 'none';
             axes(handles.axesProcessData2);
             handles.hProcLinesFS2 = plot(x2, yInit, '.-');
             handles.hProcLinesFS1 = [];
 
         else
+            % first prepare the average data, which contains ref and sig
+            % for each point
             x1 = handles.specialVec(1:handles.TEProteusInst.SweepPoints1);
             x2 = handles.specialVec(end-handles.TEProteusInst.SweepPoints2+1:end);
-
             yInit1 = NaN(numel(x1), nG);
             yInit2 = NaN(numel(x2), nG);
 
+            %
             axes(handles.axesAvgData);
             handles.hAvgLinesFS1 = plot(x1, yInit1, '.-');
+            set(handles.hAvgLinesFS1(1), 'Color', [0, 0.447, 0.741]); % 深蓝
+            set(handles.hAvgLinesFS1(2), 'Color', [0.301, 0.745, 0.933]); % 浅蓝
 
-            handles.axesAvgData2.Visible = 'on';
+            axes(handles.axesAvgData2);
+            handles.hAvgLinesFS2 = plot(x2, yInit2, '.-');
+            set(handles.hAvgLinesFS2(1), 'Color', [0.85, 0.325, 0.098]); % 深红
+            set(handles.hAvgLinesFS2(2), 'Color', [0.929, 0.694, 0.125]); % 橙黄
+
             handles.axesAvgData2.XAxisLocation = 'top';
             handles.axesAvgData2.XDir = 'reverse';
             handles.axesAvgData2.YAxisLocation = 'right';
             handles.axesAvgData2.Color = 'none';
-            axes(handles.axesAvgData2);
-            handles.hAvgLinesFS2 = plot(x2, yInit2, '.-');
+            handles.axesAvgData2.Box = 'off';
+            handles.axesAvgData2.XLim = [min(x2) max(x2)];
 
+
+            %then prepare the process data lines, which only has 1 data for each point
             axes(handles.axesProcessData);
-            handles.hProcLinesFS1 = plot(x1, yInit1, '.-');
+            handles.axesProcessData.Box = 'off';
+            handles.hProcLinesFS1 = plot(x1, yInit1(:,1), '.-');
+            set(handles.hProcLinesFS1, 'Color', [0, 0.447, 0.741]); % 深蓝
 
-            handles.axesProcessData2.Visible = 'on';
+            axes(handles.axesProcessData2);
+            handles.hProcLinesFS2 = plot(x2, yInit2(:,1), '.-');
+            set(handles.hProcLinesFS2, 'Color', [0.85, 0.325, 0.098]); % 深红
             handles.axesProcessData2.XAxisLocation = 'top';
             handles.axesProcessData2.XDir = 'reverse';
             handles.axesProcessData2.YAxisLocation = 'right';
             handles.axesProcessData2.Color = 'none';
-            axes(handles.axesProcessData2);
-            handles.hProcLinesFS2 = plot(x2, yInit2, '.-');
+            handles.axesProcessData2.Box = 'off';
+            handles.axesProcessData2.XLim = [min(x2) max(x2)];
         end
 
         % -------- 2.2) 监听 DataProcessor（事件携带 inds + expType）--------
@@ -686,11 +701,11 @@ switch Mode,
             AWG.SendCmd(':TRIG:STATE ON');
             AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
             AWG.SendCmd(':FREQ:RAST 9e9');   % 你的设备栈（保持一致）
-            AWG.SendCmd(':SOUR:VOLT 0.3');% Config Voltage from AWG
+            AWG.SendCmd(':SOUR:VOLT 0.2');% Config Voltage from AWG
             AWG.setRFOn;
         end
         fopen(MAMP);
-        fprintf(MAMP,'LEVEL:GAIN30');% Config gain from Amp
+        fprintf(MAMP,'LEVEL:GAIN40');% Config gain from Amp
         fclose(MAMP);
 
         % -------- 5) 脉冲发生器序列一次性下发 --------
@@ -986,6 +1001,11 @@ while k<=Averages
                 % 把下面的 SCPI 替换成你 setFrequencyandPhase() 内部对频率的那条命令
                 AWG.Frequency1 = Frequency(sIdx);
                 AWG.setFrequencyandPhase();
+                if AWG.Frequency1>3e9
+                    AWG.SendCmd(':SOUR:VOLT 0.4');
+                else
+                    AWG.SendCmd(':SOUR:VOLT 0.2'); %fsweep power
+                end
                 AWG.SendQuery('*OPC?');   % 等设置完成；或用 *WAI
 
                 % 若需要按点 tracking（保留你原逻辑）
@@ -1036,7 +1056,7 @@ while k<=Averages
                 PG.stop();
 
                 if myCounter.isFinished()
-                    % myCounter.streamCounts();
+                    myCounter.streamCounts();
                     myCounter.AvgIndex = k;
                     if handles.options.spinNoiseAvg
                         myCounter.saveRawDataPulsed(handles.PulseSequence.getSweepIndex, k, handles.spinNoiseFilePath);
@@ -1324,6 +1344,8 @@ end
 
 drawnow();
 
+
+
 function updateAvgDataPlotPulsedRabi(handles,src,eventdata)
 if strcmp(handles.note, 'Pulsed/f-sweep')
     % f-sweep Rabi: set-mode incremental update using inds (preferred)
@@ -1431,6 +1453,38 @@ end
 
 drawnow();
 
+% function updateAvgDataPlotPulsedRabi(handles, src, eventdata)
+%     % 1. 获取当前更新的索引
+%     if nargin >= 3 && isprop(eventdata, 'inds')
+%         inds = eventdata.inds;
+%     else
+%         return; % 如果没有索引，说明没必要增量更新
+%     end
+% 
+%     p1 = handles.TEProteusInst.SweepPoints1;
+% 
+%     % 2. 核心逻辑：判断更新哪一个图层
+%     % 逻辑：inds <= p1 属于第一段，inds > p1 属于第二段
+%     if all(inds <= p1)
+%         % 更新第一段 (axesProcessData)
+%         updateLineData(handles.hProcLinesFS1, inds, src.ProcessedData(inds, :));
+%     else
+%         % 更新第二段 (axesProcessData2)
+%         % 注意：这里需要减去偏移量 p1 以匹配 x2 的坐标
+%         localInds = inds - p1;
+%         updateLineData(handles.hProcLinesFS2, localInds, src.ProcessedData(inds, :));
+%     end
+% 
+%     drawnow limitrate; % 使用 limitrate 提高高频刷新时的流畅度
+% 
+% 
+% function updateLineData(hLines, inds, newData)
+%     % 封装更新逻辑，避免冗余代码
+%     for jj = 1:numel(hLines)
+%         y = get(hLines(jj), 'YData');
+%         y(inds) = newData(:, jj);
+%         set(hLines(jj), 'YData', y);
+%     end
 
 
 

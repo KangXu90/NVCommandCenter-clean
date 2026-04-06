@@ -102,7 +102,7 @@ cfg.tabor = struct();
 cfg.tabor.enable = true;
 
 % Communication
-cfg.tabor.connStr = '134.74.27.16';    % Proteus IP
+cfg.tabor.connStr = '134.74.27.42';    % Proteus IP
 cfg.tabor.paranoia_level = 1;          % 0 / 1 / 2
 
 % Optional identification / expectations

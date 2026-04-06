@@ -1,7 +1,7 @@
 function [PSeq,fn] = generatePulseSequence_kang(pi_2, pi, N_pi, pi_2_phases, pi_phaseBlock,corrTime,script,ref,RiseAmp)
     Channels = generateChannels(pi_2, pi, N_pi, pi_2_phases, pi_phaseBlock,corrTime,RiseAmp);
     Groups = generateGroups();
-    f = 1863; %MHz
+    f = 1920; %MHz
     B = (2870-f)/2.8;
     Tdip = round(1/(4.2576*B*1000)/2,9);
     TdipAdjusted = (Tdip - pi)/2;

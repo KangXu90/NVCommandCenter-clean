@@ -35,7 +35,7 @@
 
 % Edit the above text to modify the response to help ImageAcquire
 
-% Last Modified by GUIDE v2.5 22-Nov-2024 17:48:37
+% Last Modified by GUIDE v2.5 07-Mar-2026 17:40:46
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -1706,3 +1706,11 @@ end
 handles.Tracker.hwLaserState = wantOn;
 guidata(fig, handles);
 
+
+
+% --- Executes on button press in pushbuttonMagnetAlignment.
+function pushbuttonMagnetAlignment_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbuttonMagnetAlignment (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+alignmentApp = magnetalignment(handles.Tracker);

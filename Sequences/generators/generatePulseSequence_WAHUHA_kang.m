@@ -1,7 +1,7 @@
 function [PSeq,fn] = generatePulseSequence_WAHUHA_kang(pi_2, pi, N_pi, pi_2_phases, pi_phaseBlock,corrTime,script,ref,RiseAmp)
     Channels = generateChannels(pi_2, pi, N_pi, pi_2_phases, pi_phaseBlock,corrTime,RiseAmp);
     Groups = generateGroups();
-    f = 1863; %MHz
+    f = 1920; %MHz
     B = (2870-f)/2.8;
     Tdip = round(1/(4.2576*B*1000)/2,9);
     TdipAdjusted = (Tdip - pi)/2;
@@ -83,7 +83,7 @@ function[Channels] = generateChannels(pi_2,pi,N_pi,pi_2_phases, pi_phaseBlock,co
     end
     gapMult = [1 gapMult 1]; % τ = gapMult * b * PulseSpacing
     b = 1;
-    PulseSpacingUnit = 80e-9;
+    PulseSpacingUnit = 50e-9;
     PulseSpacing = gapMult * b * PulseSpacingUnit;
 
 
