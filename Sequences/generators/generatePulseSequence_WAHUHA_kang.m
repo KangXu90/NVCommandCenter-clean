@@ -83,7 +83,7 @@ function[Channels] = generateChannels(pi_2,pi,N_pi,pi_2_phases, pi_phaseBlock,co
     end
     gapMult = [1 gapMult 1]; % τ = gapMult * b * PulseSpacing
     b = 1;
-    PulseSpacingUnit = 50e-9;
+    PulseSpacingUnit = 221e-9;
     PulseSpacing = gapMult * b * PulseSpacingUnit;
 
 

@@ -700,12 +700,12 @@ switch Mode,
             AWG.SendCmd(':TRIG:SOUR:ENAB TRG1');
             AWG.SendCmd(':TRIG:STATE ON');
             AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
-            AWG.SendCmd(':FREQ:RAST 9e9');   % 你的设备栈（保持一致）
-            AWG.SendCmd(':SOUR:VOLT 0.2');% Config Voltage from AWG
+            % AWG.SendCmd(':FREQ:RAST 9e9');   % 你的设备栈（保持一致）
+            % AWG.SendCmd(':SOUR:VOLT 0.2');% Config Voltage from AWG
             AWG.setRFOn;
         end
         fopen(MAMP);
-        fprintf(MAMP,'LEVEL:GAIN40');% Config gain from Amp
+        % fprintf(MAMP,'LEVEL:GAIN40');% Config gain from Amp
         fclose(MAMP);
 
         % -------- 5) 脉冲发生器序列一次性下发 --------
@@ -824,9 +824,9 @@ while k<=Averages
             %              AWG.setRFOn();
             % reset sweeps
             handles.PulseSequence.SweepIndex = 1;
-            while handles.PulseSequence.getSweepIndex > 0,
+            while handles.PulseSequence.getSweepIndex > 0
 
-                if myCounter.hasAborted,
+                if myCounter.hasAborted
                     %                     myCounter.hasAborted = 0;
                     break;
                 end
@@ -871,8 +871,8 @@ while k<=Averages
                 % ======================================================
                 % ======================================================
                 for m = 1:min(1,size(AWGPSeq,1))% Channel 1 only (simplified)
-            hwCh = 1; chanIdxForParams = 3;
-            AWG.Channel = hwCh; AWG.selectChannel();
+                    hwCh = 1; chanIdxForParams = 3;
+                    AWG.Channel = hwCh; AWG.selectChannel();
                     % --- 找边沿，得到 [start_indices, end_indices] ---
                     v = int16(AWGPSeq(m,:));
                     edge = diff([0, v, 0]);
@@ -904,6 +904,22 @@ while k<=Averages
                         AWGQ(idx) = valsQ;
                     end
 
+                    if ~isempty(start_idx)
+                        segs  = arrayfun(@(s,e) s:e, start_idx, end_idx, 'UniformOutput', false);
+                        idx   = [segs{:}];
+                        lens  = cellfun(@numel, segs);
+
+                        % 每个段使用自身的幅度/相位
+                        valsI = repelem(Amp .* cosd(Ph + 45), lens);
+                        valsQ = repelem(Amp .* sind(Ph + 45), lens);
+
+                        % cos(2*pi*100e6/1.2e9*(RiseStart:RiseEnd)+Phases(RiseCount)*pi/180)
+
+                        AWGI(idx) = valsI;
+                        AWGQ(idx) = valsQ;
+                    end
+
+
 
 
                     % --- 【优化3】仅归一化，不再整体乘最后一次幅度 ---
@@ -932,7 +948,6 @@ while k<=Averages
                 %Setup the rawdata array
                 myCounter.RawData = zeros(myCounter.NSamples*myCounter.NCounterGates,1);
                 myCounter.RawDataIndex = 0;
-
 
                 % arm the counter
                 myCounter.arm();
