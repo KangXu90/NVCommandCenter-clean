@@ -1,4 +1,4 @@
-function [Sequence, tempPS, AWGPS, TimeVector] = ProcessPulseSequence(varargin)
+function [Sequence, tempPS, AWGPS,AWGarrayI,AWGarrayQ, TimeVector] = ProcessPulseSequence(varargin)
 % PROCESSPULSESEQUENCE
 % [Sequence, tempPS, AWGPS, TimeVector] = ProcessPulseSequence(PSeq, SourceFreq)
 % [Sequence, tempPS, AWGPS, TimeVector] = ProcessPulseSequence(PSeq, SourceFreq, SeqType)
@@ -52,6 +52,9 @@ Sequence  = PulseSequenceToInstruction(pbSeqObj, SourceFreq);
 awgPS   = buildAWGView(tempPS);                           % 仅保留 HWChannel>=3；删 ref(5)
 awgPS   = alignFirstRiseToZero(awgPS);                    % 对齐首 rise
 AWGPS   = PulseSequenceToArray(awgPS, AWGfrequency);      % int16 矩阵: 通道 x 采样点
+[AWGarrayI,AWGarrayQ]   = ArrayToAWGIQ(awgPS, AWGPS, AWGfrequency);      % int16 矩阵: 通道 x 采样点
+
+
 
 % ----------- (可选) 将 awgPS 量化到 AWG tick（默认关闭）-----------
 % awgPS = quantizePS(awgPS, 1/AWGfrequency, 'contain');
@@ -174,7 +177,7 @@ function [Sequence] = PulseSequenceToArray(PSeq, SourceFreq)
 
 % 最大时间 -> 样点数
 tmax     = PSeq.GetMaxRiseTime;
-SeqPoints = max(0, ceil(tmax * SourceFreq));
+SeqPoints = max(0, round(tmax * SourceFreq));
 if SeqPoints <= 0
     Sequence = zeros(numel(PSeq.Channels), 0, 'int16');
     return;
@@ -218,7 +221,47 @@ for k = 1:numel(PSeq.Channels)
 end
 end
 
+function [AWGIarray,AWGQarray] = ArrayToAWGIQ(PSeq, AWGarray, SourceFreq)
+% 将通道映射成 AWG“二值数组”视图（+1/-1，交替）
+for m = 1:size(AWGarray,1)% Channel 1 only (simplified)
 
+    v = int16(AWGarray(m,:));
+    edge = diff([0, v, 0]);
+    all_idx   = find(edge ~= 0);
+    start_idx = all_idx(1:2:end);
+    end_idx   = all_idx(2:2:end) - 1;
+
+    % --- 【优化4】用 single 降低内存/拷贝开销 ---
+    nSamp = numel(v);
+    AWGIarray(m,:)  = single(zeros(1,nSamp));
+    AWGQarray(m,:)  = single(zeros(1,nSamp));
+
+    % 取该硬件通道的幅度/相位序列
+    Ph  = single(PSeq.Channels(m).RisePhases);
+    Amp = single(PSeq.Channels(m).RiseAmplitudes);
+
+    % if isfield(PSeq.Channels(m), 'RiseFrequencies') && ~isempty(PSeq.Channels(m).RiseFrequencies)
+    %     fre = single(PSeq.Channels(m).RiseFrequencies);
+    % else
+    %     fre = zeros(size(Amp), 'single');
+    % end
+
+    % --- 【优化5】向量化为每个脉冲段赋值 ---
+
+    if ~isempty(start_idx)
+        segs  = arrayfun(@(s,e) s:e, start_idx, end_idx, 'UniformOutput', false);
+        idx   = [segs{:}];
+        lens  = cellfun(@numel, segs);
+
+        % 每个段使用自身的幅度/相位
+        valsI = repelem(Amp .* cosd(Ph + 45), lens);
+        valsQ = repelem(Amp .* sind(Ph + 45), lens);
+
+        AWGIarray(m,idx) = valsI;
+        AWGQarray(m,idx) = valsQ;
+    end
+end
+end
 
 function [tempPSeq, TimeVector] = PulseSequenceSweepToArray(PSeq)
 % 应用 sweep 到一个 clone（不产生指令/数组，仅改字段）

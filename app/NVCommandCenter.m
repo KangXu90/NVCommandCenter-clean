@@ -265,7 +265,10 @@ AWG.SendCmd(':TRAC:DEL:ALL');
 
 % set the MW amplifier from low power but keep off
 MAMP = handles.MicrowaveAmp;
+try
 fopen(MAMP);
+catch
+end
 fprintf(MAMP,'POWER:ON');
 fclose(MAMP);
 
@@ -325,8 +328,21 @@ handles.note = Mode;
 
 %%%% VERY UGLY HACK
 %%%% REMOVE THIS AS SOON AS YOU UNDERSTAND HOW TO SAVE SUBCLASSED OBJECTS
-switch Mode,
+switch Mode
     case 'Pulsed'
+
+        %==================
+        %general config
+        if str2double(SG.Frequency1)>2e9
+            sr_baseband = 1.125e9;                 % 你的基带采样率（与IQM插值、FREQ:RAST匹配）
+        else
+            sr_baseband = 1e9;
+        end
+
+        samplerate = num2str(8 * sr_baseband, '%.0e');                 % 你的基带采样率（与IQM插值、FREQ:RAST匹配）
+
+
+
 
         % ===============================
         % (原逻辑) 计算sweep/计数器等
@@ -346,21 +362,14 @@ switch Mode,
         myCounter.init();
 
         % 解析当前 sweep 的脉冲序列（保持你的接口）
-        if str2double(SG.Frequency1)>2e9
-            sr_baseband = 1.125e9;                 % 你的基带采样率（与IQM插值、FREQ:RAST匹配）
-        else
-            sr_baseband = 1e9;
-        end
+
         handles.PulseSequence.SweepIndex = 1;
-        [BinarySequence,tempSequence,AWGPSeq,TimeVector] = ProcessPulseSequence( ...
+        [BinarySequence,tempSequence,AWGPSeq, AWGPSeqI, AWGPSeqQ,TimeVector] = ProcessPulseSequence( ...
             handles.PulseSequence, 400e6, 'Instruction', sr_baseband);
 
         % 画图（保持原逻辑）
         PulseSequencerFunctions('DrawSequenceExternal',handles.axesPulseSequence,tempSequence);
 
-        % % 下发门控序列到脉冲发生器（保持原逻辑）
-        % HWChannels = [handles.PulseSequence.getHardwareChannels]';
-        % PG.sendSequence(BinarySequence, Samples, 0);
         % used for plot
         handles.TimeVector = TimeVector;
 
@@ -381,47 +390,47 @@ switch Mode,
                 myCounter.expType = '';
         end
 
-            % Pulse mode: use DataProcessor to update Counter.AveragedData / ProcessedData
-            handles.DataProcessor = DataProcessor(myCounter);
+        % Pulse mode: use DataProcessor to update Counter.AveragedData / ProcessedData
+        handles.DataProcessor = DataProcessor(myCounter);
 
-            % Pre-create plot handles for incremental (inds) update (set-mode)
-            x = handles.TimeVector;
-            yInit = NaN(length(x), myCounter.NCounterGates);
-            axes(handles.axesAvgData);
-            handles.hAvgLines = plot(x, yInit, '.-');
-            handles.axesAvgData2.Visible = 'on';
-            handles.axesAvgData2.XAxisLocation = 'top';
-            handles.axesAvgData2.XDir = 'reverse';
-            handles.axesAvgData2.YAxisLocation = 'right';
-            handles.axesAvgData2.Color = 'none';
+        % Pre-create plot handles for incremental (inds) update (set-mode)
+        x = handles.TimeVector;
+        yInit = NaN(length(x), myCounter.NCounterGates);
+        axes(handles.axesAvgData);
+        handles.hAvgLines = plot(x, yInit, '.-');
+        handles.axesAvgData2.Visible = 'on';
+        handles.axesAvgData2.XAxisLocation = 'top';
+        handles.axesAvgData2.XDir = 'reverse';
+        handles.axesAvgData2.YAxisLocation = 'right';
+        handles.axesAvgData2.Color = 'none';
 
-            % Processed axis (contrast)
-            if strcmp(myCounter.expType,'Rabi')
-                SWP = handles.PulseSequence.Sweeps(1);
-                xProc = linspace(SWP.StartValue, SWP.StopValue, SWP.SweepPoints)';
-            else
-                xProc = handles.TimeVector;
-            end
-            yProcInit = NaN(length(xProc), myCounter.NCounterGates);
-            axes(handles.axesProcessData);
-            handles.hProcLines = plot(xProc, yProcInit, '.-');
-            handles.axesProcessData2.Visible = 'on';
-            handles.axesProcessData2.XAxisLocation = 'top';
-            handles.axesProcessData2.XDir = 'reverse';
-            handles.axesProcessData2.YAxisLocation = 'right';
-            handles.axesProcessData2.Color = 'none';
-            % Listeners on DataProcessor (events carry inds + expType)
-            handles.hListener2 = addlistener(handles.DataProcessor,'UpdateCounterProcData', ...
-                @(src,eventdata)updateAvgDataPlotPulsed(handles,myCounter,eventdata));
+        % Processed axis (contrast)
+        if strcmp(myCounter.expType,'Rabi')
+            SWP = handles.PulseSequence.Sweeps(1);
+            xProc = linspace(SWP.StartValue, SWP.StopValue, SWP.SweepPoints)';
+        else
+            xProc = handles.TimeVector;
+        end
+        yProcInit = NaN(length(xProc), myCounter.NCounterGates);
+        axes(handles.axesProcessData);
+        handles.hProcLines = plot(xProc, yProcInit, '.-');
+        handles.axesProcessData2.Visible = 'on';
+        handles.axesProcessData2.XAxisLocation = 'top';
+        handles.axesProcessData2.XDir = 'reverse';
+        handles.axesProcessData2.YAxisLocation = 'right';
+        handles.axesProcessData2.Color = 'none';
+        % Listeners on DataProcessor (events carry inds + expType)
+        handles.hListener2 = addlistener(handles.DataProcessor,'UpdateCounterProcData', ...
+            @(src,eventdata)updateAvgDataPlotPulsed(handles,myCounter,eventdata));
 
-            switch myCounter.expType
-                case 'Rabi'
-                    handles.hListener3 = addlistener(handles.DataProcessor,'UpdateCounterProcData_Rabi', ...
-                        @(src,eventdata)updateAvgDataPlotPulsedRabi(handles,myCounter,eventdata));
-                case 'T2'
-                    handles.hListener3 = addlistener(handles.DataProcessor,'UpdateCounterProcData_T2', ...
-                        @(src,eventdata)updateAvgDataPlotPulsedT2(handles,myCounter,eventdata));
-            end
+        switch myCounter.expType
+            case 'Rabi'
+                handles.hListener3 = addlistener(handles.DataProcessor,'UpdateCounterProcData_Rabi', ...
+                    @(src,eventdata)updateAvgDataPlotPulsedRabi(handles,myCounter,eventdata));
+            case 'T2'
+                handles.hListener3 = addlistener(handles.DataProcessor,'UpdateCounterProcData_T2', ...
+                    @(src,eventdata)updateAvgDataPlotPulsedT2(handles,myCounter,eventdata));
+        end
 
         guidata(hObject,handles);
 
@@ -437,7 +446,6 @@ switch Mode,
         % ======================================================
         % 【优化1】AWG 一次性初始化（不要在循环里反复配置）
         % ======================================================
-        samplerate = num2str(8 * sr_baseband, '%.0e');                 % 你的基带采样率（与IQM插值、FREQ:RAST匹配）
         AWG.Connect();
         for ch = 1
             AWG.Channel = ch; AWG.selectChannel();
@@ -455,26 +463,35 @@ switch Mode,
 
             % 【优化6】启用 Marker1 输出（一次性设置）
         end
-        %     AWG.Channel = ch; AWG.selectChannel();
-        %     AWG.SendCmd(':TRAC:DEL:ALL');
-        %     AWG.SendCmd(':IQM ONE');       % 例：DUC ONE（1.25Gsps），与设备设置保持一致
-        %     AWG.SendCmd(':INIT:CONT OFF');
-        %     AWG.SendCmd(':TRIG:SEL TRG1');
-        %     AWG.SendCmd(':TRIG:LEV 0.5');
-        %     AWG.SendCmd(':TRIG:SOUR:ENAB TRG1');
-        %     AWG.SendCmd(':TRIG:STATE ON');
-        %     AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
-        %     AWG.SendCmd(':FREQ:RAST 8e9'); % 与 sr_baseband * 插值 一致
-        %     % AWG.SendCmd(':SOUR:VOLT 0.8'); % 【优化3】把幅度交给硬件，避免后续整体缩放
-        %     AWG.setRFOn();
-        %
-        %     % 【优化6】启用 Marker1 输出（一次性设置）
-        % end
 
         handles.PulseSequence.SweepIndex = 1;
 
-
     case 'Pulsed/f-sweep'
+
+
+         ConfigVoltageForRange = false;
+        % general config
+        %default samplerate for pulse-ODMR
+        if  ConfigVoltageForRange 
+        sr_baseband = 1.125e9;
+        AmpGain = 40; % percent
+        voltage_below3GHz = 0.2;
+        voltage_above3GHz = 0.4;
+
+        fopen(MAMP);
+        cmd = ['LEVEL:GAIN', num2str(AmpGain)];
+        fprintf(MAMP, [cmd, '\n']);  % 发送命令
+        fclose(MAMP);
+        samplerate = 8*sr_baseband;
+
+        else
+        % % for DD sequence sweep deturning offset
+        sr_baseband = 1.0e9;  
+        % sr_baseband = 1.125e9;
+        samplerate = 8*sr_baseband;
+        end
+
+
         % -------- 1) 组频点（支持两个区间拼接）--------
         f1 = []; f2 = [];
         if AWG.SweepZoneState1
@@ -525,9 +542,6 @@ switch Mode,
 
         nG = myCounter.NCounterGates;
 
-        % handles.axesAvgData2.Visible = 'off';
-        % handles.axesProcessData2.Visible = 'off';
-
         if handles.TEProteusInst.SweepZoneState1 && ~handles.TEProteusInst.SweepZoneState2
             handles.axesAvgData2.Visible = 'off';
             handles.axesProcessData2.Visible = 'off';
@@ -571,7 +585,6 @@ switch Mode,
             yInit1 = NaN(numel(x1), nG);
             yInit2 = NaN(numel(x2), nG);
 
-            %
             axes(handles.axesAvgData);
             handles.hAvgLinesFS1 = plot(x1, yInit1, '.-');
             set(handles.hAvgLinesFS1(1), 'Color', [0, 0.447, 0.741]); % 深蓝
@@ -588,7 +601,6 @@ switch Mode,
             handles.axesAvgData2.Color = 'none';
             handles.axesAvgData2.Box = 'off';
             handles.axesAvgData2.XLim = [min(x2) max(x2)];
-
 
             %then prepare the process data lines, which only has 1 data for each point
             axes(handles.axesProcessData);
@@ -630,83 +642,48 @@ switch Mode,
             save(handles.spinNoiseFilePath,'M'); clear M;
         end
 
-        sr_baseband = 1.125e9;    % DUC ONE 模式的基带采样率（保持你原设定）
         % 解析当前 sweep 的脉冲序列（保持你的接口）
         handles.PulseSequence.SweepIndex = 1;
-        [BinarySequence,tempSequence,AWGPSeq] = ProcessPulseSequence( ...
+        [BinarySequence,tempSequence,AWGPSeq,AWGPSeqI, AWGPSeqQ] = ProcessPulseSequence( ...
             handles.PulseSequence, 400e6, 'Instruction', sr_baseband);
 
+
         % ======================================================
-        % ======================================================
-        for m = 1:min(1,size(AWGPSeq,1))% Channel 1 only (simplified)
-            hwCh = 1; chanIdxForParams = 3;
-            AWG.Channel = hwCh; AWG.selectChannel();
-            % --- 找边沿，得到 [start_indices, end_indices] ---
-            v = int16(AWGPSeq(m,:));
-            edge = diff([0, v, 0]);
-            all_idx   = find(edge ~= 0);
-            start_idx = all_idx(1:2:end);
-            end_idx   = all_idx(2:2:end) - 1;
+        AWGconfig.ChannelsToUse = 1;
+        % AWGconfig.ChannelsToUse = [1,2];
 
-            % --- 【优化4】用 single 降低内存/拷贝开销 ---
-            nSamp = numel(v);
-            AWGI  = single(zeros(1,nSamp));
-            AWGQ  = single(zeros(1,nSamp));
-
-            % 取该硬件通道的幅度/相位序列
-            Ph  = single(tempSequence.Channels(chanIdxForParams).RisePhases);
-            Amp = single(tempSequence.Channels(chanIdxForParams).RiseAmplitudes);
-
-            % --- 【优化5】向量化为每个脉冲段赋值 ---
-            if ~isempty(start_idx)
-                segs  = arrayfun(@(s,e) s:e, start_idx, end_idx, 'UniformOutput', false);
-                idx   = [segs{:}];
-                lens  = cellfun(@numel, segs);
-
-                % 每个段使用自身的幅度/相位
-                valsI = repelem(Amp .* cosd(Ph + 45), lens);
-                valsQ = repelem(Amp .* sind(Ph + 45), lens);
-
-                AWGI(idx) = valsI;
-                AWGQ(idx) = valsQ;
-            end
-
+        for chIdx = AWGconfig.ChannelsToUse
+            I_wave =  AWGPSeqI(chIdx,:);
+            Q_wave =  AWGPSeqQ(chIdx,:);
             % --- 【优化3】仅归一化，不再整体乘最后一次幅度 ---
-            [AWGI, AWGQ] = AWG.NormalIq(AWGI', AWGQ');  % 别再整体缩放
-            w = max(Amp)*AWG.Interleave(AWGI, AWGQ);             % 单精度足够
-
+            [AWGI, AWGQ] = AWG.NormalIq(I_wave', Q_wave');  % 别再整体缩放
+            % w = max(Amp)*AWG.Interleave(AWGI, AWGQ);             % 单精度足够
+            w = AWG.Interleave(AWGI, AWGQ);             % 单精度足够
             % 粒度对齐
             outLen = max(ceil(numel(w)/AWG.Granularity)*AWG.Granularity, 5120);
             if numel(w) < outLen
                 w(outLen) = single(0);
             end
-
             % --- 【优化4】转为 int16 以匹配16-bit DAC ---
             % w_i16 = int16(32767 * w);
 
             % 下发波形到段1（保持你的API）
-            SendWfmToProteus(AWG, hwCh, 1, w, 16);
+            SendWfmToProteus(AWG, chIdx, 1, w, 16);
 
-            %
-        end
-
-        % -------- 4) 一次性 AWG 通道与触发设置 --------
-        for ch = 1
-            AWG.SendCmd(sprintf('INST:CHAN %d', ch));
+            % -------- 4) 一次性 AWG 通道与触发设置 --------
+            % 选择段并确保RF ON（初始化里已做，一般不必重复）
+            AWG.SendCmd(sprintf('INST:CHAN %d', chIdx));
             AWG.SendCmd(':IQM ONE');
             AWG.SendCmd(':INIT:CONT OFF');
             AWG.SendCmd(':TRIG:SEL TRG1');
-            AWG.SendCmd(':TRIG:LEV 0.3');
+            AWG.SendCmd(':TRIG:LEV 0.5');
             AWG.SendCmd(':TRIG:SOUR:ENAB TRG1');
             AWG.SendCmd(':TRIG:STATE ON');
             AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
-            % AWG.SendCmd(':FREQ:RAST 9e9');   % 你的设备栈（保持一致）
+            AWG.SendCmd(':FREQ:RAST %d',samplerate);   % 你的设备栈（保持一致）
             % AWG.SendCmd(':SOUR:VOLT 0.2');% Config Voltage from AWG
             AWG.setRFOn;
         end
-        fopen(MAMP);
-        % fprintf(MAMP,'LEVEL:GAIN40');% Config gain from Amp
-        fclose(MAMP);
 
         % -------- 5) 脉冲发生器序列一次性下发 --------
         PG.sendSequence(BinarySequence, Samples, 0);
@@ -761,8 +738,8 @@ while k<=Averages
     % end
     if strcmp(Mode,'Pulsed/f-sweep'),
         handles.PulseSequence.SweepIndex = 1;
-        [BinarySequence,temp,AWGPSeq] = ProcessPulseSequence(handles.PulseSequence,PG.ClockRate,'Instruction',1.125e9);
-        HWChannels = [handles.PulseSequence.getHardwareChannels]';
+        [BinarySequence,temp,AWGPSeq, AWGPSeqI, AWGPSeqQ] = ProcessPulseSequence(handles.PulseSequence,PG.ClockRate,'Instruction',samplerate);
+        % HWChannels = [handles.PulseSequence.getHardwareChannels]';
         % update the sequence plot
         PulseSequencerFunctions('DrawSequenceExternal',handles.axesPulseSequence,tempSequence);
         % Load Pulse Sequence and set loops to # of sweeps
@@ -787,41 +764,9 @@ while k<=Averages
 
         case 'Pulsed',
 
-            %             if myCounter.hasAborted,
-            %                 myCounter.hasAborted = 0;
-            %                 break;
-            %             end
-
             % turn on SG RF
             AWG.Connect();
-            % AWG.Channel = 3;
-            % AWG.selectChannel();
-            % AWG.SendCmd(':IQM ONE'); %limit the sampling rate to 1.25GHz with DUC for one mode
-            % AWG.SendCmd(':INIT:CONT OFF');
-            % AWG.SendCmd(':TRIG:SEL TRG1');
-            % AWG.SendCmd(':TRIG:LEV 0.5');
-            % AWG.SendCmd(':TRIG:SOUR:ENAB TRG1');
-            % AWG.SendCmd(':TRIG:STATE ON');
-            %
-            % AWG.Channel = 1;
-            % AWG.selectChannel();
-            % AWG.SendCmd(':IQM ONE'); %limit the sampling rate to 1.25GHz with DUC for one mode
-            % AWG.SendCmd(':INIT:CONT OFF');
-            % AWG.SendCmd(':TRIG:SEL TRG1');
-            % AWG.SendCmd(':TRIG:LEV 0.5');
-            % AWG.SendCmd(':TRIG:SOUR:ENAB TRG1');
-            % AWG.SendCmd(':TRIG:STATE ON');
-            %
-            %
-            % AWG.SendCmd(':FREQ:RAST 9e9');
 
-
-            % AWG.SendCmd(':SOUR:VOLT 1.3');
-            % AWG.SendCmd(':FUNC:MODE TASK ')
-
-
-            %         AWG.SendCmd(':TRIG:IDLE FIRS');
-            %              AWG.setRFOn();
             % reset sweeps
             handles.PulseSequence.SweepIndex = 1;
             while handles.PulseSequence.getSweepIndex > 0
@@ -850,83 +795,32 @@ while k<=Averages
                     end
                 end
 
-                %                 % Parse Pulse Sequence For Pulsed Experiment
-                % [BinarySequence,tempSequence,AWGPSeq] = ProcessPulseSequence(handles.PulseSequence,PG.ClockRate,'Instruction');
-
-                % Parse Pulse Sequence For Pulsed Experiment
-
                 % 解析当前 sweep 的脉冲序列（保持你的接口）
-                [BinarySequence,tempSequence,AWGPSeq,TimeVector] = ProcessPulseSequence( ...
+                [BinarySequence,tempSequence,AWGPSeq,AWGPSeqI,AWGPSeqQ,TimeVector] = ProcessPulseSequence( ...
                     handles.PulseSequence, 400e6, 'Instruction', sr_baseband);
 
                 % 画图（保持原逻辑）
                 PulseSequencerFunctions('DrawSequenceExternal',handles.axesPulseSequence,tempSequence);
 
                 % 下发门控序列到脉冲发生器（保持原逻辑）
-                HWChannels = [handles.PulseSequence.getHardwareChannels]';
+                % HWChannels = [handles.PulseSequence.getHardwareChannels]';
                 PG.sendSequence(BinarySequence, Samples, 0);
                 % used for plot
                 handles.TimeVector = TimeVector;
 
-                % ======================================================
-                % ======================================================
-                for m = 1:min(1,size(AWGPSeq,1))% Channel 1 only (simplified)
-                    hwCh = 1; chanIdxForParams = 3;
-                    AWG.Channel = hwCh; AWG.selectChannel();
-                    % --- 找边沿，得到 [start_indices, end_indices] ---
-                    v = int16(AWGPSeq(m,:));
-                    edge = diff([0, v, 0]);
-                    all_idx   = find(edge ~= 0);
-                    start_idx = all_idx(1:2:end);
-                    end_idx   = all_idx(2:2:end) - 1;
-
-                    % --- 【优化4】用 single 降低内存/拷贝开销 ---
-                    nSamp = numel(v);
-                    AWGI  = single(zeros(1,nSamp));
-                    AWGQ  = single(zeros(1,nSamp));
-
-                    % 取该硬件通道的幅度/相位序列
-                    Ph  = single(tempSequence.Channels(chanIdxForParams).RisePhases);
-                    Amp = single(tempSequence.Channels(chanIdxForParams).RiseAmplitudes);
-
-                    % --- 【优化5】向量化为每个脉冲段赋值 ---
-
-                    if ~isempty(start_idx)
-                        segs  = arrayfun(@(s,e) s:e, start_idx, end_idx, 'UniformOutput', false);
-                        idx   = [segs{:}];
-                        lens  = cellfun(@numel, segs);
-
-                        % 每个段使用自身的幅度/相位
-                        valsI = repelem(Amp .* cosd(Ph + 45), lens);
-                        valsQ = repelem(Amp .* sind(Ph + 45), lens);
-
-                        AWGI(idx) = valsI;
-                        AWGQ(idx) = valsQ;
-                    end
-
-                    if ~isempty(start_idx)
-                        segs  = arrayfun(@(s,e) s:e, start_idx, end_idx, 'UniformOutput', false);
-                        idx   = [segs{:}];
-                        lens  = cellfun(@numel, segs);
-
-                        % 每个段使用自身的幅度/相位
-                        valsI = repelem(Amp .* cosd(Ph + 45), lens);
-                        valsQ = repelem(Amp .* sind(Ph + 45), lens);
-
-                        % cos(2*pi*100e6/1.2e9*(RiseStart:RiseEnd)+Phases(RiseCount)*pi/180)
-
-                        AWGI(idx) = valsI;
-                        AWGQ(idx) = valsQ;
-                    end
+                AWGconfig.ChannelsToUse = 1;
+                % AWGconfig.ChannelsToUse = [1,2];
 
 
+                for chIdx = AWGconfig.ChannelsToUse
 
+                    I_wave =  AWGPSeqI(chIdx,:);
+                    Q_wave =  AWGPSeqQ(chIdx,:);
 
                     % --- 【优化3】仅归一化，不再整体乘最后一次幅度 ---
-                    [AWGI, AWGQ] = AWG.NormalIq(AWGI', AWGQ');  % 别再整体缩放
-                    w = max(Amp)*AWG.Interleave(AWGI, AWGQ);             % 单精度足够
-                    % w = AWG.Interleave(AWGI, AWGQ);             % 单精度足够
-
+                    [AWGI, AWGQ] = AWG.NormalIq(I_wave', Q_wave');  % 别再整体缩放
+                    % w = max(Amp)*AWG.Interleave(AWGI, AWGQ);             % 单精度足够
+                    w = AWG.Interleave(AWGI, AWGQ);             % 单精度足够
 
                     % 粒度对齐
                     outLen = max(ceil(numel(w)/AWG.Granularity)*AWG.Granularity, 5120);
@@ -938,13 +832,13 @@ while k<=Averages
                     % w_i16 = int16(32767 * w);
 
                     % 下发波形到段1（保持你的API）
-                    SendWfmToProteus(AWG, hwCh, 1, w, 16);
+
+                    SendWfmToProteus(AWG, chIdx, 1, w, 16);
+
+                    % 选择段并确保RF ON（初始化里已做，一般不必重复）
+                    AWG.SendCmd('INST:CHAN d%', chIdx); AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
+
                 end
-
-
-
-                % 选择段并确保RF ON（初始化里已做，一般不必重复）
-                AWG.SendCmd('INST:CHAN 1'); AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
                 %Setup the rawdata array
                 myCounter.RawData = zeros(myCounter.NSamples*myCounter.NCounterGates,1);
                 myCounter.RawDataIndex = 0;
@@ -1009,18 +903,19 @@ while k<=Averages
             % 显式 for 循环更清晰（也可以保留 getSweepIndex 的 while）
             for sIdx = 1:numel(Frequency)
                 handles.PulseSequence.SweepIndex = sIdx;
-
                 if myCounter.hasAborted, break; end
-
                 % -------- 6) 仅更新载波频率并等待落地（建议用设备的 DUC/NCO 设频命令）--------
                 % 把下面的 SCPI 替换成你 setFrequencyandPhase() 内部对频率的那条命令
                 AWG.Frequency1 = Frequency(sIdx);
                 AWG.setFrequencyandPhase();
-                if AWG.Frequency1>3e9
-                    AWG.SendCmd(':SOUR:VOLT 0.4');
-                else
-                    AWG.SendCmd(':SOUR:VOLT 0.2'); %fsweep power
+                if ConfigVoltageForRange
+                    if AWG.Frequency1>3e9
+                        AWG.SendCmd(':SOUR:VOLT %d',voltage_above3GHz);
+                    else
+                        AWG.SendCmd(':SOUR:VOLT %d',voltage_below3GHz); %fsweep power
+                    end
                 end
+
                 AWG.SendQuery('*OPC?');   % 等设置完成；或用 *WAI
 
                 % 若需要按点 tracking（保留你原逻辑）
@@ -1053,7 +948,6 @@ while k<=Averages
                 % -------- 正式采集 --------
                 myCounter.RawData = zeros(myCounter.NSamples*myCounter.NCounterGates,1);
                 myCounter.RawDataIndex = 0;
-
 
                 % arm the counter
                 myCounter.arm();
@@ -1475,9 +1369,9 @@ drawnow();
 %     else
 %         return; % 如果没有索引，说明没必要增量更新
 %     end
-% 
+%
 %     p1 = handles.TEProteusInst.SweepPoints1;
-% 
+%
 %     % 2. 核心逻辑：判断更新哪一个图层
 %     % 逻辑：inds <= p1 属于第一段，inds > p1 属于第二段
 %     if all(inds <= p1)
@@ -1489,10 +1383,10 @@ drawnow();
 %         localInds = inds - p1;
 %         updateLineData(handles.hProcLinesFS2, localInds, src.ProcessedData(inds, :));
 %     end
-% 
+%
 %     drawnow limitrate; % 使用 limitrate 提高高频刷新时的流畅度
-% 
-% 
+%
+%
 % function updateLineData(hLines, inds, newData)
 %     % 封装更新逻辑，避免冗余代码
 %     for jj = 1:numel(hLines)
