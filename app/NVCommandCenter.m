@@ -122,9 +122,9 @@ function popupMode_Callback(hObject, eventdata, handles)
 
 contents = get(hObject,'String');
 val =contents{get(hObject,'Value')};
-if strcmp(val,'CW');
+if strcmp(val,'CW')
     set(handles.editSequenceSamples,'Enable','off');
-elseif strcmp(val,'Pulsed');
+elseif strcmp(val,'Pulsed')
     set(handles.editSequenceSamples,'Enable','on');
 end
 
@@ -414,6 +414,8 @@ switch Mode
         yProcInit = NaN(length(xProc), myCounter.NCounterGates);
         axes(handles.axesProcessData);
         handles.hProcLines = plot(xProc, yProcInit, '.-');
+        set(handles.hProcLines, 'Color', [0, 0.447, 0.741]); % 深蓝
+
         handles.axesProcessData2.Visible = 'on';
         handles.axesProcessData2.XAxisLocation = 'top';
         handles.axesProcessData2.XDir = 'reverse';
@@ -468,8 +470,9 @@ switch Mode
 
     case 'Pulsed/f-sweep'
 
+         % ConfigVoltageForRange = true;
 
-         ConfigVoltageForRange = false;
+          ConfigVoltageForRange = false;
         % general config
         %default samplerate for pulse-ODMR
         if  ConfigVoltageForRange 
@@ -554,6 +557,8 @@ switch Mode
 
             axes(handles.axesProcessData);
             handles.hProcLinesFS1 = plot(x1, yInit, '.-');
+            set(handles.hProcLinesFS1, 'Color', [0, 0.447, 0.741]); % 深蓝
+
             handles.hProcLinesFS2 = [];
 
         elseif handles.TEProteusInst.SweepZoneState2 && ~handles.TEProteusInst.SweepZoneState1
@@ -656,7 +661,7 @@ switch Mode
             I_wave =  AWGPSeqI(chIdx,:);
             Q_wave =  AWGPSeqQ(chIdx,:);
             % --- 【优化3】仅归一化，不再整体乘最后一次幅度 ---
-            [AWGI, AWGQ] = AWG.NormalIq(I_wave', Q_wave');  % 别再整体缩放
+            [AWGI, AWGQ] = AWG.NormalIq(I_wave', Q_wave',1);  % 别再整体缩放
             % w = max(Amp)*AWG.Interleave(AWGI, AWGQ);             % 单精度足够
             w = AWG.Interleave(AWGI, AWGQ);             % 单精度足够
             % 粒度对齐
@@ -687,6 +692,9 @@ switch Mode
 
         % -------- 5) 脉冲发生器序列一次性下发 --------
         PG.sendSequence(BinarySequence, Samples, 0);
+    case 'Pulsed/N-sweep'
+        
+
 
 end %switch
 refPoint = [0,0,0];
@@ -818,7 +826,8 @@ while k<=Averages
                     Q_wave =  AWGPSeqQ(chIdx,:);
 
                     % --- 【优化3】仅归一化，不再整体乘最后一次幅度 ---
-                    [AWGI, AWGQ] = AWG.NormalIq(I_wave', Q_wave');  % 别再整体缩放
+
+                    [AWGI, AWGQ] = AWG.NormalIq(I_wave', Q_wave',1);  % if normal to max power
                     % w = max(Amp)*AWG.Interleave(AWGI, AWGQ);             % 单精度足够
                     w = AWG.Interleave(AWGI, AWGQ);             % 单精度足够
 
@@ -3063,11 +3072,15 @@ switch mode
 end
 
 ydata = Exp.Counter.AveragedData;
-if size(ydata,2)==3
-    ycontrast = (ydata(:,2)-ydata(:,3))./(ydata(:,2)+ydata(:,3));
-else
-    ycontrast = ydata(:,2)./ydata(:,1);
-end
+
+% if size(ydata,2)==3
+%     ycontrast = (ydata(:,2)-ydata(:,3))./(ydata(:,2)+ydata(:,3));
+% else
+%     ycontrast = ydata(:,2)./ydata(:,1);
+% end
+
+ycontrast = Exp.Counter.ProcessedData(:,1);
+
 T = table(xdata, ydata,ycontrast);
 % case'Pulsed/f-sweep';
 %     startF = str2num(get(handles.editStartF,'String'));

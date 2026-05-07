@@ -50,7 +50,7 @@ classdef DataProcessor < handle
             if isnan(c.ProcessedData(inds,:))
                 c.ProcessedData(inds,:) = AvgCountsContrast;
             else
-                c.ProcessedData(inds,:) = (c.ProcessedData(inds,:) * (c.AvgIndex - 1) + AvgCountsContrast) / c.AvgIndex;
+                c.ProcessedData(inds,1) = c.AveragedData(:,2) / c.AveragedData(:,1);
             end
 
 
@@ -60,14 +60,13 @@ classdef DataProcessor < handle
         function processRawDataPulsed_T2(obj, inds)
             c = obj.CounterRef;
 
-            AvgCountsContrast = (c.AveragedData(inds,2) - c.AveragedData(inds,3)) ./ (c.AveragedData(inds,2) + c.AveragedData(inds,3));
+            AvgCountsContrast = (c.AveragedData(inds,3) - c.AveragedData(inds,2)) ./ (c.AveragedData(inds,2) + c.AveragedData(inds,3));
 
             if isnan(c.ProcessedData(inds,:))
-                c.ProcessedData(inds,:) = AvgCountsContrast;
+                c.ProcessedData(inds,1) = AvgCountsContrast;
             else
-                c.ProcessedData(inds,:) = (c.ProcessedData(inds,:) * (c.AvgIndex - 1) + AvgCountsContrast) / c.AvgIndex;
+                c.ProcessedData(:,1) = (c.AveragedData(:,3) - c.AveragedData(:,2)) ./ (c.AveragedData(:,2) + c.AveragedData(:,3));
             end
-
 
             notify(obj, 'UpdateCounterProcData_T2', ProcessedDataEventData(inds, c.expType));
         end

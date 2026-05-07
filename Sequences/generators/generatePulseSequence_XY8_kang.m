@@ -1,9 +1,11 @@
 function [PSeq,fn] = generatePulseSequence_XY8_kang(pi_2, pi, N_pi, pi_2_phases, pi_phaseBlock,corrTime,script,ref,RiseAmp)
     Channels = generateChannels(pi_2, pi, N_pi, pi_2_phases, pi_phaseBlock,corrTime,RiseAmp);
     Groups = generateGroups();
-    f = 1863; %MHz
+    f = 828; %MHz
     B = (2870-f)/2.8;
-    Tdip = round(1/(4.2576*B*1000)/2,9);
+    Tdip = round(1/(4.005*B*1000)/2,9);
+    % Tdip = round(1/(4.2576*B*1000)/2,9);
+
     TdipAdjusted = (Tdip - pi)/2;
     start = TdipAdjusted - 30e-9;
     if(start < 10e-9)
@@ -15,7 +17,7 @@ function [PSeq,fn] = generatePulseSequence_XY8_kang(pi_2, pi, N_pi, pi_2_phases,
     % Channels(1,1).RiseSweepMultipliers = [];
     % Channels(1,2).RiseSweepMultipliers = [];
     if corrTime == 0
-        Sweeps = generateSweeps(3,'Type','Time','sweep',0,0,2,0,1);
+        Sweeps = generateSweeps(3,'Type','Time','sweep',start,stop,61,2,1);
     else
         Sweeps = generateSweeps(3,'Type','Time', 'corr' ,.01e-6,10.01e-6,101,2,1);
     end
@@ -23,7 +25,7 @@ function [PSeq,fn] = generatePulseSequence_XY8_kang(pi_2, pi, N_pi, pi_2_phases,
     if ~ref
         Channels = Channels(1:3);
     end
-    PSeq = PulseSequence(Channels,[],Sweeps,1,['WAHUHA' num2str(N_pi)]);
+    PSeq = PulseSequence(Channels,[],Sweeps,1,['XY8' num2str(N_pi)]);
     
     PSeq.setMWHWChannel(3);
     if ~script
@@ -83,7 +85,7 @@ function[Channels] = generateChannels(pi_2,pi,N_pi,pi_2_phases, pi_phaseBlock,co
     end
     gapMult = [1 gapMult 1]; % τ = gapMult * b * PulseSpacing
     b = 1;
-    PulseSpacingUnit = 80e-9;
+    PulseSpacingUnit = 0e-9;
     PulseSpacing = gapMult * b * PulseSpacingUnit;
 
 
@@ -160,10 +162,10 @@ function[Channels] = generateChannels(pi_2,pi,N_pi,pi_2_phases, pi_phaseBlock,co
             Channels(3).setRiseParams(i+Channels(3).NumberOfRises/2,runningTime + corrTime,pi_2,'sweep',RiseAmp,pi_2_phases(2)+180,0,1);
             runningTime = runningTime + pi_2  + corrTime;
         elseif i ==  Channels(3).NumberOfRises/2-1
-            Channels(3).setRiseParams(i+Channels(3).NumberOfRises/2,runningTime + corrTime*2,pi,'sweep',RiseAmp,phases(i),0,1);
+            Channels(3).setRiseParams(i+Channels(3).NumberOfRises/2,runningTime + corrTime*2,pi,'sweep',RiseAmp,phases(i)+180,0,1);
             runningTime = runningTime + PulseSpacing(i)/2 + corrTime*2;
         else
-            Channels(3).setRiseParams(i+Channels(3).NumberOfRises/2,runningTime + corrTime*2,pi,'sweep',RiseAmp,phases(i),0,1);
+            Channels(3).setRiseParams(i+Channels(3).NumberOfRises/2,runningTime + corrTime*2,pi,'sweep',RiseAmp,phases(i)+180,0,1);
             runningTime = runningTime + PulseSpacing(i) + corrTime*2;
         end
     end

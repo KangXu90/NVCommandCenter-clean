@@ -771,11 +771,17 @@ classdef TEProteusInst < SignalGeneratorTabor
         end
 
 
-        function [normI,  normQ] = NormalIq(obj,wfmI, wfmQ)
+        function [normI,  normQ] = NormalIq(obj,wfmI, wfmQ, powernormal)
             maxPwr = double(max(wfmI.*wfmI + wfmQ .* wfmQ));
-            maxPwr = maxPwr ^ 0.5;
-            normI = double(wfmI / maxPwr);
-            normQ = double(wfmQ / maxPwr);
+            maxPwr = maxPwr ^ 0.5;    
+            if powernormal
+                normI = double(wfmI / maxPwr);
+                normQ = double(wfmQ / maxPwr);
+            else
+                normI = double(wfmI);
+                normQ = double(wfmQ);
+            end
+
         end
 
         function outWfm = Interleave(obj,wfmI, wfmQ)

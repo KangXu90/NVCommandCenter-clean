@@ -1,15 +1,15 @@
 function [PSeq,fn] = generatePulseSequence_kang(pi_2, pi, N_pi, pi_2_phases, pi_phaseBlock,corrTime,script,ref,RiseAmp)
     Channels = generateChannels(pi_2, pi, N_pi, pi_2_phases, pi_phaseBlock,corrTime,RiseAmp);
     Groups = generateGroups();
-    f = 1920; %MHz
+    f = 825; %MHz
     B = (2870-f)/2.8;
-    Tdip = round(1/(4.2576*B*1000)/2,9);
+    Tdip = round(1/(4.2576*B*1000)/2,8);
     TdipAdjusted = (Tdip - pi)/2;
-    start = TdipAdjusted - 30e-9;
+    start = TdipAdjusted - 15e-9;
     if(start < 10e-9)
         start = 10e-9;
     end
-    stop = TdipAdjusted + 30e-9; 
+    stop = TdipAdjusted + 15e-9; 
     % Channels(1,1).RiseFrequencies = [];
     % Channels(1,2).RiseFrequencies = [];
     % Channels(1,1).RiseSweepMultipliers = [];
@@ -41,12 +41,15 @@ function[Channels] = generateChannels(pi_2,pi,N_pi,pi_2_phases, pi_phaseBlock,co
     delayAOM_MW = 2e-6;
     delayDAQ_AOM = 300e-9;
     counterGate = 800e-9;
-    laserPulse = 20e-6;
+    laserPulse = 30e-6;
+    
+    PulseSpacing = 0e-9; %  spacing between pulses
 
+    reversephase = 0; % test if phase reverse influence the XY8 proton detection like polarization transfer, put 0 for default
     
     
-%     Counterzone = 0.5e-6;
-correlationtime = 0;
+%   Counterzone = 0.5e-6;
+    correlationtime = 0;
     
 % Initialize channels1
     Channels = [PulseChannel(),PulseChannel(),PulseChannel(),PulseChannel()];
@@ -76,7 +79,6 @@ correlationtime = 0;
     while Channels(3).NumberOfRises < N_pi + 2
         Channels(3).addRise();
     end
-     PulseSpacing = 0;
     %configure first pulse train, if corrTime = 0 this is the only pulse
     %train
     for i = 1:Channels(3).NumberOfRises
@@ -143,10 +145,10 @@ correlationtime = 0;
                 Channels(3).setRiseParams(i+ Channels(3).NumberOfRises/2,runningTime + corrTime,pi_2,'sweep',RiseAmp,pi_2_phases(2)+180,0,1);
                 runningTime = runningTime + pi_2  + corrTime;
             elseif i == 2
-                Channels(3).setRiseParams(i+ Channels(3).NumberOfRises/2,runningTime + corrTime,pi,'sweep',RiseAmp,phases(i),0,1);
+                Channels(3).setRiseParams(i+ Channels(3).NumberOfRises/2,runningTime + corrTime,pi,'sweep',RiseAmp,phases(i)+reversephase,0,1);
                 runningTime = runningTime + pi + PulseSpacing + corrTime;
             else
-                Channels(3).setRiseParams(i+ Channels(3).NumberOfRises/2,runningTime + corrTime*2,pi,'sweep',RiseAmp,phases(i),0,2);
+                Channels(3).setRiseParams(i+ Channels(3).NumberOfRises/2,runningTime + corrTime*2,pi,'sweep',RiseAmp,phases(i)+reversephase,0,2);
                 runningTime = runningTime + pi + PulseSpacing + corrTime*2;
             end
         end

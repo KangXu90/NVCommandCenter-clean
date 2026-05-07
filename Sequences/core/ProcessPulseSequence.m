@@ -52,7 +52,10 @@ Sequence  = PulseSequenceToInstruction(pbSeqObj, SourceFreq);
 awgPS   = buildAWGView(tempPS);                           % 仅保留 HWChannel>=3；删 ref(5)
 awgPS   = alignFirstRiseToZero(awgPS);                    % 对齐首 rise
 AWGPS   = PulseSequenceToArray(awgPS, AWGfrequency);      % int16 矩阵: 通道 x 采样点
-[AWGarrayI,AWGarrayQ]   = ArrayToAWGIQ(awgPS, AWGPS, AWGfrequency);      % int16 矩阵: 通道 x 采样点
+% [AWGarrayI,AWGarrayQ]   = ArrayToAWGIQ(awgPS, AWGPS, AWGfrequency);      % int16 矩阵: 通道 x 采样点
+
+
+[AWGarrayI,AWGarrayQ]   = ArrayToAWGIQwithFrequency(awgPS, AWGPS, AWGfrequency);      % int16 矩阵: 通道 x 采样点
 
 
 
@@ -239,6 +242,10 @@ for m = 1:size(AWGarray,1)% Channel 1 only (simplified)
     % 取该硬件通道的幅度/相位序列
     Ph  = single(PSeq.Channels(m).RisePhases);
     Amp = single(PSeq.Channels(m).RiseAmplitudes);
+    try
+    Fre = single(PSeq.Channels(m).RiseFrequencys);
+    catch
+    end
 
     % if isfield(PSeq.Channels(m), 'RiseFrequencies') && ~isempty(PSeq.Channels(m).RiseFrequencies)
     %     fre = single(PSeq.Channels(m).RiseFrequencies);
@@ -259,6 +266,55 @@ for m = 1:size(AWGarray,1)% Channel 1 only (simplified)
 
         AWGIarray(m,idx) = valsI;
         AWGQarray(m,idx) = valsQ;
+    end
+end
+end
+
+function [AWGIarray,AWGQarray] = ArrayToAWGIQwithFrequency(PSeq, AWGarray, SourceFreq)
+% SampleRate: AWG 的采样率（如 1e9 代表 1GS/s），用于计算 t = idx / SampleRate
+
+for m = 1:size(AWGarray,1)
+    v = int16(AWGarray(m,:));
+    edge = diff([0, v, 0]);
+    all_idx   = find(edge ~= 0);
+    start_idx = all_idx(1:2:end);
+    end_idx   = all_idx(2:2:end) - 1;
+
+    nSamp = numel(v);
+    AWGIarray(m,:) = single(zeros(1,nSamp));
+    AWGQarray(m,:) = single(zeros(1,nSamp));
+
+    Ph  = single(PSeq.Channels(m).RisePhases);
+    Amp = single(PSeq.Channels(m).RiseAmplitudes);
+    
+    % --- 处理频率 Fre ---
+    % 如果不存在或为空，设为 0
+    if ~isempty(PSeq.Channels(m).RiseFrequencies)
+        Fre = single(PSeq.Channels(m).RiseFrequencies);
+    else
+        Fre = zeros(size(Amp), 'single');
+    end
+
+    if ~isempty(start_idx)
+        % 遍历每个脉冲段，因为每个段的频率和起始时间不同
+        for k = 1:numel(start_idx)
+            curr_idx = start_idx(k):end_idx(k);
+            
+            % 1. 生成相对于序列起点 (t=0) 的时间向量
+            % 如果你需要“绝对相干”，t 必须从序列起始点计算
+            t = single(curr_idx - 1) / SourceFreq; 
+            
+            % 2. 计算当前段的角频率 (2 * pi * f)
+            w = 2 * pi * Fre(k);
+            
+            % 3. 计算 I/Q 值
+            % 注意：sind/cosd 处理角度，这里 w*t 是弧度，建议统一使用弧度或转换
+            % 这里加上 45 度补偿（根据你原代码）
+            total_phase_rad = w .* t + deg2rad(Ph(k) + 45);
+            
+            AWGIarray(m, curr_idx) = Amp(k) * cos(total_phase_rad);
+            AWGQarray(m, curr_idx) = Amp(k) * sin(total_phase_rad);
+        end
     end
 end
 end
@@ -549,6 +605,28 @@ switch SweepType
 
     case 'Frequency'
         % 这里留空（你的代码里也是占位）
+        for k = 1:size(pairs,1)
+            chnK  = pairs(k,1);
+            riseK = pairs(k,2);
+
+            % 如果不存在或为空，设为 0
+            % if isfield(tempPSeq.Channels(chnK), 'RiseFrequencies') && ~isempty(tempPSeq.Channels(chnK).RiseFrequencies)
+            %     tempPSeq.Channels(chnK).RiseFrequencies(riseK) = tempPSeq.Channels(chnK).RiseFrequencie(riseK);
+            % else
+            %      tempPSeq.Channels(chnK).RiseFrequencies = zeros(size(tempPSeq.Channels(chnK).RisePhases), 'single');
+            % 
+            % 
+            % end
+
+            if PSeq.Sweeps(jj).SweepAdd
+                tempPSeq.Channels(chnK).RiseFrequencies(riseK) = ...
+                    tempPSeq.Channels(chnK).RiseFrequencies(riseK) + ...
+                    TimeVector(ind(jj));
+            else
+                tempPSeq.Channels(chnK).RiseFrequencies(riseK) = ...
+                    TimeVector(ind(jj));
+            end
+        end
 end
 end
 
