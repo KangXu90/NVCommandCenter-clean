@@ -15,7 +15,7 @@ function [PSeq,fn] = generatePulseSequence_WAHUHA_kang(pi_2, pi, N_pi, pi_2_phas
     % Channels(1,1).RiseSweepMultipliers = [];
     % Channels(1,2).RiseSweepMultipliers = [];
     if corrTime == 0
-        Sweeps = generateSweeps(3,'Type','Frequency','sweep',-5e6,5e6,101,0,1);
+        Sweeps = generateSweeps(3,'Type','Frequency','sweep',2e6,2e6,1,0,0);
     else
         Sweeps = generateSweeps(3,'Type','Time', 'corr' ,.01e-6,10.01e-6,101,2,1);
     end

@@ -48,9 +48,9 @@ classdef DataProcessor < handle
             AvgCountsContrast = c.AveragedData(inds,2) / c.AveragedData(inds,1);
 
             if isnan(c.ProcessedData(inds,:))
-                c.ProcessedData(inds,:) = AvgCountsContrast;
+                c.ProcessedData(inds,1) = AvgCountsContrast;
             else
-                c.ProcessedData(inds,1) = c.AveragedData(:,2) / c.AveragedData(:,1);
+                c.ProcessedData(:,1) = c.AveragedData(:,2) ./ c.AveragedData(:,1);
             end
 
 

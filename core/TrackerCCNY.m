@@ -168,7 +168,7 @@ classdef TrackerCCNY < Tracker
                     % only these are included in the gradient calcualtion
                     bThresh = zeros(1,7);
                     bThresh(Inds) = 1;
-                    bThresh(2:5)=0; % by Kang 20240115 tracking only on z direnctions
+                    % bThresh(2:5)=0; % by Kang 20240115 tracking only on z direnctions
                     %tracing commented by Daniela
                     
                     %                      add by kang to tracking only on x and y direnctions
@@ -215,7 +215,7 @@ classdef TrackerCCNY < Tracker
                     obj.hImageAcquisition.CursorPosition = [PosX,PosY,PosZ] + jumpPoint;
 %                  
 %                 
-                    obj.hImageAcquisition.SetCursor(); % added by kang only tracking 2D
+                    % obj.hImageAcquisition.SetCursor(); % added by kang only tracking 2D
 
                 end
                 newRefPoint = [PosX,PosY,PosZ];

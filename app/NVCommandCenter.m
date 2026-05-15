@@ -470,9 +470,9 @@ switch Mode
 
     case 'Pulsed/f-sweep'
 
-         % ConfigVoltageForRange = true;
+          ConfigVoltageForRange = true;
 
-          ConfigVoltageForRange = false;
+          % ConfigVoltageForRange = false;
         % general config
         %default samplerate for pulse-ODMR
         if  ConfigVoltageForRange 
@@ -692,9 +692,191 @@ switch Mode
 
         % -------- 5) 脉冲发生器序列一次性下发 --------
         PG.sendSequence(BinarySequence, Samples, 0);
-    case 'Pulsed/N-sweep'
+    case 'Pulsed/N-sweep',
+        % setup the data structures
+        % Assume that this sort of experiment has a 1D pulse sweep and a
+        % single frequency sweep
         
+        % get # of sweeps and # of points
+        %      inds = str2num(get(handles.editPointsF,'String'));
+        
+        % number of Tau
+        
+        %{ kang 202/12/29 Variables for Pulsed/N-sweep
+        startN = 4;
+        stopN = 804;
+        pointsN = 201;
+        a = 90;
+        b = 180;
+        c = 270;
+        d = 0;
 
+
+        p = 50e-9;
+        XY = 16;
+        Tau = 50e-9;
+        %} Variables for Pulsed/N-sweep ended
+        
+        Ntaus = linspace(startN,stopN,pointsN);
+        handles.specialVec = Ntaus; 
+        inds = pointsN;
+        Np = startN;
+        
+        %{kang 2022/12/28 for different Ntau, Counter number would not
+        %change, so there is no need to change here
+        
+        % get total number of counter gates
+        if XY == 2;
+            Q = generatePulseSequence_kang(p/2,p,XY*Np,[a,c], [0,a],0,1);
+        end
+        if XY == 8
+            Q = generatePulseSequence_kang(p/2,p,XY*Np,[0,0], [0,a,0,a,a,0,a,0],0,1,0,1.0);
+        end
+        if XY == 16 % DSL-4
+            Q = generatePulseSequence_WAHUHA_kang(p/2,p,Np,[90,90],[180,270,90,0,180,90,270,0,0,90,270,180,0,270,90,180],0,1,0,1.0);
+        end
+
+        handles.PulseSequence = Q;
+        PulseVector = Ntaus;
+
+
+
+            %==================
+        %general config
+        if str2double(SG.Frequency1)>2e9
+            sr_baseband = 1.125e9;                 % 你的基带采样率（与IQM插值、FREQ:RAST匹配）
+        else
+            sr_baseband = 1e9;
+        end
+
+        samplerate = num2str(8 * sr_baseband, '%.0e');                 % 你的基带采样率（与IQM插值、FREQ:RAST匹配）
+
+
+
+
+        % ===============================
+        % (原逻辑) 计算sweep/计数器等
+        % ===============================
+        % inds = handles.PulseSequence.getSweepIndexMax();
+
+        % 统计 Counter gate 数
+        cnts = strfind([handles.PulseSequence.Channels(:).RiseTypes],'Counter');
+        CounterGates = sum([cnts{:}]);
+
+        % 初始化计数器=
+        myCounter.NSamples       = Samples;
+        myCounter.DataDims       = inds;
+        myCounter.NAverages      = Averages;
+        myCounter.NCounterGates  = CounterGates;
+        myCounter.MaxCounts      = 100;
+        myCounter.init();
+
+        % 解析当前 sweep 的脉冲序列（保持你的接口）
+
+        handles.PulseSequence.SweepIndex = 1;
+        [BinarySequence,tempSequence,AWGPSeq, AWGPSeqI, AWGPSeqQ,TimeVector] = ProcessPulseSequence( ...
+            handles.PulseSequence, 400e6, 'Instruction', sr_baseband);
+
+        % 画图（保持原逻辑）
+        PulseSequencerFunctions('DrawSequenceExternal',handles.axesPulseSequence,tempSequence);
+
+        % used for plot
+        handles.TimeVector = PulseVector;
+
+        % 监听器（保持原逻辑）
+        handles.hListener  = addlistener(myCounter,'UpdateCounterData', ...
+            @(src,eventdata)updateSingleDataPlot(handles,src,eventdata)); % currently not used
+
+        promodeselec = get(handles.pnlProcessMode,'SelectedObject');
+        promode      = get(promodeselec,'Tag');
+
+        % Set expType on Counter for pulsed processing
+        switch promode
+            case 'buttonRabiMode'
+                myCounter.expType = 'Rabi';
+            case 'buttonT2Mode'
+                myCounter.expType = 'T2';
+            otherwise
+                myCounter.expType = '';
+        end
+
+        % Pulse mode: use DataProcessor to update Counter.AveragedData / ProcessedData
+        handles.DataProcessor = DataProcessor(myCounter);
+
+        % Pre-create plot handles for incremental (inds) update (set-mode)
+        x = handles.TimeVector;
+        yInit = NaN(length(x), myCounter.NCounterGates);
+        axes(handles.axesAvgData);
+        handles.hAvgLines = plot(x, yInit, '.-');
+        handles.axesAvgData2.Visible = 'on';
+        handles.axesAvgData2.XAxisLocation = 'top';
+        handles.axesAvgData2.XDir = 'reverse';
+        handles.axesAvgData2.YAxisLocation = 'right';
+        handles.axesAvgData2.Color = 'none';
+
+        % Processed axis (contrast)
+        if strcmp(myCounter.expType,'Rabi')
+            SWP = handles.PulseSequence.Sweeps(1);
+            xProc = linspace(SWP.StartValue, SWP.StopValue, SWP.SweepPoints)';
+        else
+            xProc = handles.TimeVector;
+        end
+        yProcInit = NaN(length(xProc), myCounter.NCounterGates);
+        axes(handles.axesProcessData);
+        handles.hProcLines = plot(xProc, yProcInit, '.-');
+        set(handles.hProcLines, 'Color', [0, 0.447, 0.741]); % 深蓝
+
+        handles.axesProcessData2.Visible = 'on';
+        handles.axesProcessData2.XAxisLocation = 'top';
+        handles.axesProcessData2.XDir = 'reverse';
+        handles.axesProcessData2.YAxisLocation = 'right';
+        handles.axesProcessData2.Color = 'none';
+        % Listeners on DataProcessor (events carry inds + expType)
+        handles.hListener2 = addlistener(handles.DataProcessor,'UpdateCounterProcData', ...
+            @(src,eventdata)updateAvgDataPlotNPulsed(handles,myCounter,eventdata));
+
+        switch myCounter.expType
+            case 'Rabi'
+                handles.hListener3 = addlistener(handles.DataProcessor,'UpdateCounterProcData_Rabi', ...
+                    @(src,eventdata)updateAvgDataPlotPulsedRabi(handles,myCounter,eventdata));
+            case 'T2'
+                handles.hListener3 = addlistener(handles.DataProcessor,'UpdateCounterProcData_T2', ...
+                    @(src,eventdata)updateAvgDataPlotPulsedT2(handles,myCounter,eventdata));
+        end
+
+        guidata(hObject,handles);
+
+        % 如需保存spin-noise，保持原逻辑
+        if handles.options.spinNoiseAvg
+            M  = zeros(myCounter.NSamples,1);
+            fn = ['SpinNoise',datestr(now,'yyyymmdd-HHMMSS')];
+            fp = handles.options.SpinNoiseDataFolder;
+            handles.spinNoiseFilePath = fullfile(fp,fn);
+            save(handles.spinNoiseFilePath,'M'); clear('M');
+        end
+
+        % ======================================================
+        % 【优化1】AWG 一次性初始化（不要在循环里反复配置）
+        % ======================================================
+        AWG.Connect();
+        for ch = 1
+            AWG.Channel = ch; AWG.selectChannel();
+            AWG.SendCmd(':TRAC:DEL:ALL');
+            AWG.SendCmd(':IQM ONE');       % 例：DUC ONE（1.25Gsps），与设备设置保持一致
+            AWG.SendCmd(':INIT:CONT OFF');
+            AWG.SendCmd(':TRIG:SEL TRG1');
+            AWG.SendCmd(':TRIG:LEV 0.5');
+            AWG.SendCmd(':TRIG:SOUR:ENAB TRG1');
+            AWG.SendCmd(':TRIG:STATE ON');
+            AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
+            AWG.SendCmd(':FREQ:RAST', samplerate); % 与 sr_baseband * 插值 一致
+            % AWG.SendCmd(':SOUR:VOLT 0.8'); % 【优化3】把幅度交给硬件，避免后续整体缩放
+            AWG.setRFOn();
+
+            % 【优化6】启用 Marker1 输出（一次性设置）
+        end
+
+      
 
 end %switch
 refPoint = [0,0,0];
@@ -842,8 +1024,9 @@ while k<=Averages
 
                     % 下发波形到段1（保持你的API）
 
-                    SendWfmToProteus(AWG, chIdx, 1, w, 16);
-
+                    SendWfmToProteus(AWG, chIdx, 1, w, 16); %%% sometimes the AWG could not receive the...
+                                                              % file and make the measurement stop during long time measurement
+ 
                     % 选择段并确保RF ON（初始化里已做，一般不必重复）
                     AWG.SendCmd('INST:CHAN d%', chIdx); AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
 
@@ -1001,6 +1184,158 @@ while k<=Averages
 
             % handles.specialData(:,:,handles.PulseSequence.getSweepIndex) = myCounter.AveragedData;
             % end freq sweep loop
+
+             case 'Pulsed/N-sweep',
+            
+            
+            
+            
+            for qq = 1:length(Ntaus), % loop over the frequencies
+                
+                % turn on SG RF
+                Np = Ntaus(qq);
+                if XY == 2;
+                    Q = generatePulseSequence_kang(p/2,p,XY*Np,[0,d], [a,c],0,1);
+                end
+                if XY == 8
+                    Q = generatePulseSequence_kang(p/2,p,XY*Np,[0,0], [0,a,0,a,a,0,a,0],0,1,0,1.0);
+                end
+                if XY == 16 % DSL-4
+                    Q = generatePulseSequence_WAHUHA_kang(p/2,p,Np,[90,90],[180,270,90,0,180,90,270,0,0,90,270,180,0,270,90,180],0,1,0,1.0);
+                end
+                handles.PulseSequence = Q;
+                handles.PulseSequence.Sweeps.StartValue = 0;
+                handles.PulseSequence.Sweeps.StopValue = 0;
+                handles.PulseSequence.Sweeps.SweepPoints = 1;
+                
+                
+                % do all the normal things of a pulsed experiment, but before
+                % doing that, change the frequency of the carrier
+                
+                   % reset sweeps
+            handles.PulseSequence.SweepIndex = 1;
+            while handles.PulseSequence.getSweepIndex > 0
+
+                if myCounter.hasAborted
+                    %                     myCounter.hasAborted = 0;
+                    break;
+                end
+
+                % see if we are tracking per sweep point
+                if get(handles.cbTrackEnable,'Value') && get(handles.popupTrackFreq,'Value') == 2,
+                    Thresh = str2double(get(handles.editTrackThreshold,'String'));
+                    % get counts
+                    handles.Tracker.laserOn();
+                    Counts = handles.Tracker.GetCountsCurPos;
+                    handles.Tracker.laserOff();
+
+                    set(handles.textTrackCounts,'String',Counts);
+
+                    if Counts < Thresh*ReferenceCounts,
+                        TrackingViewer(handles.Tracker);
+                        handles.Tracker.trackCenter(refPoint);
+
+                        close(findobj(0,'name','TrackingViewer'));
+                        set(handles.textLastTrackPos,'String',datestr(now,'yyyy-mm-dd HH:MM:SS'));
+                    end
+                end
+
+                % 解析当前 sweep 的脉冲序列（保持你的接口）
+                [BinarySequence,tempSequence,AWGPSeq,AWGPSeqI,AWGPSeqQ,TimeVector] = ProcessPulseSequence( ...
+                    handles.PulseSequence, 400e6, 'Instruction', sr_baseband);
+
+                % 画图（保持原逻辑）
+                PulseSequencerFunctions('DrawSequenceExternal',handles.axesPulseSequence,tempSequence);
+
+                % 下发门控序列到脉冲发生器（保持原逻辑）
+                % HWChannels = [handles.PulseSequence.getHardwareChannels]';
+                PG.sendSequence(BinarySequence, Samples, 0);
+                % used for plot
+                % handles.TimeVector = TimeVector;
+                % handles.TimeVector = Ntaus; 
+
+
+                AWGconfig.ChannelsToUse = 1;
+                % AWGconfig.ChannelsToUse = [1,2];
+
+
+                for chIdx = AWGconfig.ChannelsToUse
+
+                    I_wave =  AWGPSeqI(chIdx,:);
+                    Q_wave =  AWGPSeqQ(chIdx,:);
+
+                    % --- 【优化3】仅归一化，不再整体乘最后一次幅度 ---
+
+                    [AWGI, AWGQ] = AWG.NormalIq(I_wave', Q_wave',1);  % if normal to max power
+                    % w = max(Amp)*AWG.Interleave(AWGI, AWGQ);             % 单精度足够
+                    w = AWG.Interleave(AWGI, AWGQ);             % 单精度足够
+
+                    % 粒度对齐
+                    outLen = max(ceil(numel(w)/AWG.Granularity)*AWG.Granularity, 5120);
+                    if numel(w) < outLen
+                        w(outLen) = single(0);
+                    end
+
+                    % --- 【优化4】转为 int16 以匹配16-bit DAC ---
+                    % w_i16 = int16(32767 * w);
+
+                    % 下发波形到段1（保持你的API）
+
+                    SendWfmToProteus(AWG, chIdx, 1, w, 16);
+
+                    % 选择段并确保RF ON（初始化里已做，一般不必重复）
+                    AWG.SendCmd('INST:CHAN d%', chIdx); AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
+
+                end
+                %Setup the rawdata array
+                myCounter.RawData = zeros(myCounter.NSamples*myCounter.NCounterGates,1);
+                myCounter.RawDataIndex = 0;
+
+                % arm the counter
+                myCounter.arm();
+                PG.start();
+                while ~myCounter.isFinished()
+                    myCounter.streamCounts();
+                end
+                try
+                    % Pull once more to drain the tail, in case isFinished is true
+                    % but the FIFO isn't empty yet.
+                    % solved the point swap problem
+                    myCounter.streamCounts();
+                catch
+                end
+                    PG.stop();
+                    pause(.2);
+                    if myCounter.isFinished()
+                        %Get the last counts
+                        myCounter.streamCounts();
+                        myCounter.AvgIndex = k;
+                        if handles.options.spinNoiseAvg,
+                            myCounter.saveRawDataPulsed(handles.PulseSequence.getSweepIndex,k,handles.spinNoiseFilePath);
+                        end
+                        % Pulse-mode processing moved to DataProcessor (NICounter stops at streamCounts)
+                        
+                        handles.DataProcessor.processRawDataPulsed(qq);
+                        switch myCounter.expType
+                            case 'Rabi'
+                                handles.DataProcessor.processRawDataPulsed_Rabi(qq);
+                            case 'T2'
+                                handles.DataProcessor.processRawDataPulsed_T2(qq);
+                        end
+
+                        myCounter.disarm();
+                        handles.PulseSequence.incrementSweepIndex();
+                    else
+                        disp('Counter Dropped a Pulse. Repeating');
+                        SetStatus(handles,'Repeating Sweep.');
+                        myCounter.disarm();
+                        myCounter.RawData = zeros(myCounter.NSamples*myCounter.NCounterGates,1);
+                    end
+                    %pause(.5);
+                end % end pulse sweep loop
+                
+                handles.specialData(:,:,qq) = myCounter.AveragedData;
+            end % end Ntau sweep loop
 
     end %Switch on Pulse/CW
 
@@ -1463,7 +1798,7 @@ function updateAvgDataPlotNPulsed(handles,src,eventdata)
 data = src.AveragedData;
 data = (data(:,1) - data(:,2))./data(:,2);
 if numel(handles.PulseSequence.Sweeps) == 1,
-    x = handles.specialVec;
+    x = handles.TimeVector;
     plot(x,src.AveragedData,'.-','Parent',handles.axesAvgData);
 else
     plot(src.AveragedData,'.-','Parent',handles.axesAvgData);
@@ -3067,6 +3402,8 @@ mode = Exp.Notes;
 switch mode
     case'Pulsed'
         xdata = Exp.TimeVector;
+    case'Pulsed/N-sweep'
+        xdata = Exp.TimeVector';
     case 'Pulsed/f-sweep'
         xdata = transpose(linspace(Exp.SignalGenerator.SweepStart1,Exp.SignalGenerator.SweepStop1,Exp.SignalGenerator.SweepPoints1));
 end
