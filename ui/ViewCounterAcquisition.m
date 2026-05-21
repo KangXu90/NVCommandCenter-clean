@@ -85,7 +85,8 @@ classdef ViewCounterAcquisition < handle
         
         
         function StartCounter(obj)
-            obj.CounterIniatialParameter = obj.hCounterAcquisition;
+            obj.CounterIniatialParameter = [];
+            cleanupObj = [];
 
              % start counter ok
             obj.CounterStatus = 0;
@@ -96,15 +97,21 @@ classdef ViewCounterAcquisition < handle
                 DutyCycle = str2double(get(obj.hDC,'String'));
                 NumberOfSamples = str2double(get(obj.hSample,'String'));
 
+                obj.CounterIniatialParameter = struct(...
+                    'DwellTime', obj.hCounterAcquisition.DwellTime, ...
+                    'DutyCycle', obj.hCounterAcquisition.DutyCycle, ...
+                    'NumberOfSamples', obj.hCounterAcquisition.NumberOfSamples);
+                cleanupObj = onCleanup(@()RestoreCounterParameters(obj));
+
                 obj.hCounterAcquisition.DwellTime = Dwell;
                 obj.hCounterAcquisition.DutyCycle = DutyCycle;
-                obj.hCounterAcquisition.NumberOfSamples = NumberOfSamples+10;
+                obj.hCounterAcquisition.NumberOfSamples = NumberOfSamples;
 
             end
             
             for k=1:obj.hCounterAcquisition.LoopsUntilTimeOut
                 if ~obj.CounterStatus
-                    pause(0.1)
+                    % pause(0.1)
                     obj.hCounterAcquisition.GetCountsPerSecond();
                     obj.CounterHistory(end+1) = obj.hCounterAcquisition.CountsPerSecond;
                     set(obj.hText,'String',num2str(round(obj.hCounterAcquisition.CountsPerSecond)));
@@ -120,9 +127,18 @@ classdef ViewCounterAcquisition < handle
       
          function StopCounter(obj)
              obj.CounterStatus = 1;
-             obj.hCounterAcquisition = obj.CounterIniatialParameter;
+             RestoreCounterParameters(obj);
              disp(mean(obj.CounterHistory));
              disp(sqrt(var(obj.CounterHistory)));
+         end
+
+         function RestoreCounterParameters(obj)
+             if ~isempty(obj.CounterIniatialParameter)
+                 obj.hCounterAcquisition.DwellTime = obj.CounterIniatialParameter.DwellTime;
+                 obj.hCounterAcquisition.DutyCycle = obj.CounterIniatialParameter.DutyCycle;
+                 obj.hCounterAcquisition.NumberOfSamples = obj.CounterIniatialParameter.NumberOfSamples;
+                 obj.CounterIniatialParameter = [];
+             end
          end
          
          function delete(obj)
