@@ -35,7 +35,7 @@
 
 % Edit the above text to modify the response to help ImageAcquire
 
-% Last Modified by GUIDE v2.5 07-Mar-2026 17:40:46
+% Last Modified by GUIDE v2.5 15-May-2026 11:50:54
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -1671,68 +1671,67 @@ function TrackThreshSet_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 newTrackThresh = str2double(get(handles.TrackThresh,'String'));
 handles.Tracker.TrackingThreshold = newTrackThresh;
-guidata(ancestor(hObject,'figure'), handles);
 
-
-% % --- Executes on button press in pushbuttonLaser.
-% function pushbuttonLaser_Callback(hObject, eventdata, handles)
-% 
-% fig = ancestor(hObject,'figure');
-% handles = guidata(fig);
-% 
-% wantOn = logical(get(hObject,'Value'));
-% 
-% try
-%     % handles.Tracker.hwLaserController.init();
-%     if wantOn
-%         handles.Tracker.laserOn();
-%         set(hObject,'String','Laser On');
-%         set(hObject,'BackgroundColor','Green');
-%     else
-%         handles.Tracker.laserOff();
-%         set(hObject,'String','Laser Off');
-%         set(hObject,'BackgroundColor','white');
-%     end
-%     % 不要 close（你说 close 会引发 bug）
-% catch ME
-%     warning('Laser toggle failed: %s', ME.message);
-%     % 失败就回滚 UI 到记录值（如果有）
-%     if isprop(handles.Tracker,'LaserState') && ~isempty(handles.Tracker.LaserState)
-%         set(hObject,'Value',handles.Tracker.LaserState);
-%     end
-% end
-% 
-% % ✅ 关键：记录状态到 Tracker，并写回 figure guidata
-% handles.Tracker.hwLaserState = wantOn;
-% guidata(fig, handles);
 
 % --- Executes on button press in pushbuttonLaser.
 function pushbuttonLaser_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbuttonLaser (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
 
-% Hint: get(hObject,'Value') returns toggle state of pushbuttonLaser
-LaserState = get(hObject,'Value');
-if LaserState
-   handles.Tracker.hwLaserController.init();
-   handles.Tracker.laserOn;
-   handles.Tracker.hwLaserController.close();
+fig = ancestor(hObject,'figure');
+handles = guidata(fig);
 
-   set(hObject,'Value',1);
-   set(hObject,'String','Laser On');
-   set(hObject,'BackgroundColor','Green');
+wantOn = logical(get(hObject,'Value'));
 
-else
-   handles.Tracker.hwLaserController.init();
-   handles.Tracker.laserOff;
-   handles.Tracker.hwLaserController.close();
-   set(hObject,'Value',0);
-   set(hObject,'String','Laser Off');
-   set(hObject,'BackgroundColor','white');
-
+try
+    % handles.Tracker.hwLaserController.init();
+    if wantOn
+        handles.Tracker.laserOn();
+        set(hObject,'String','Laser On');
+        set(hObject,'BackgroundColor','Green');
+    else
+        handles.Tracker.laserOff();
+        set(hObject,'String','Laser Off');
+        set(hObject,'BackgroundColor','white');
+    end
+    % 不要 close（你说 close 会引发 bug）
+catch ME
+    warning('Laser toggle failed: %s', ME.message);
+    % 失败就回滚 UI 到记录值（如果有）
+    if isprop(handles.Tracker,'LaserState') && ~isempty(handles.Tracker.LaserState)
+        set(hObject,'Value',handles.Tracker.LaserState);
+    end
 end
-    guidata(hObject,handles);
+
+% ✅ 关键：记录状态到 Tracker，并写回 figure guidata
+handles.Tracker.hwLaserState = wantOn;
+guidata(fig, handles);
+
+% % --- Executes on button press in pushbuttonLaser.
+% function pushbuttonLaser_Callback(hObject, eventdata, handles)
+% % hObject    handle to pushbuttonLaser (see GCBO)
+% % eventdata  reserved - to be defined in a future version of MATLAB
+% % handles    structure with handles and user data (see GUIDATA)
+% 
+% % Hint: get(hObject,'Value') returns toggle state of pushbuttonLaser
+% LaserState = get(hObject,'Value');
+% if LaserState
+%    handles.Tracker.hwLaserController.init();
+%    handles.Tracker.laserOn;
+%    handles.Tracker.hwLaserController.close();
+% 
+%    set(hObject,'Value',1);
+%    set(hObject,'String','Laser On');
+%    set(hObject,'BackgroundColor','Green');
+% 
+% else
+%    handles.Tracker.hwLaserController.init();
+%    handles.Tracker.laserOff;
+%    handles.Tracker.hwLaserController.close();
+%    set(hObject,'Value',0);
+%    set(hObject,'String','Laser Off');
+%    set(hObject,'BackgroundColor','white');
+% 
+% end
+%     guidata(hObject,handles);
 
 % --- Executes on button press in pushbuttonMagnetAlignment.
 function pushbuttonMagnetAlignment_Callback(hObject, eventdata, handles)
@@ -1791,4 +1790,5 @@ function checkboxTrackAxisChanged(hObject, eventdata, handles)
 
     % 4) 保存 handles（如果你在用 GUIDE）
     guidata(hObject, handles);
+
 

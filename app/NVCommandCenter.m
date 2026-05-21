@@ -478,7 +478,7 @@ switch Mode
         if  ConfigVoltageForRange 
         sr_baseband = 1.125e9;
         AmpGain = 40; % percent
-        voltage_below3GHz = 0.2;
+        voltage_below3GHz = 0.1;
         voltage_above3GHz = 0.4;
 
         fopen(MAMP);

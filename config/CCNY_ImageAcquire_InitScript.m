@@ -53,8 +53,8 @@ handles.ImageAcquisition.ZController = 'Piezo';
 % init Counter
 handles.Counter = CounterAcquisition();
 handles.Counter.interfaceNIDAQ = handles.NI;
-handles.Counter.DwellTime = 0.005;
-handles.Counter.NumberOfSamples = 5; % small number could fater the speed of tracking
+handles.Counter.DwellTime = 0.001;
+handles.Counter.NumberOfSamples = 10; % small number could fater the speed of tracking
 handles.Counter.LoopsUntilTimeOut = 100000;
 handles.Counter.CounterInLine = 1;
 handles.Counter.CounterOutLine = 1;
@@ -95,12 +95,14 @@ Tracker.hImageAcquisition = handles.ImageAcquisition;
 Tracker.InitialStepSize = [0.01,0.01,1];
 Tracker.StepReductionFactor = [.5,.5,0.5];
 Tracker.MinimumStepSize = [0.001,0.001,0.001];
- Tracker.TrackingThreshold = 20000;
+ Tracker.TrackingThreshold = 2000;
 Tracker.MaxIterations = 10;
 Tracker.LaserControlLine = 1; % AOM is line 1
 Tracker.InitialPosition = handles.ImageAcquisition.CursorPosition;
 Tracker.MaxCursorPosition = [2,2,100];
 Tracker.MinCursorPosition = [-2,-2,0];
+Tracker.TrackEnable = [true true true];
+
 
 handles.Tracker = Tracker;
 

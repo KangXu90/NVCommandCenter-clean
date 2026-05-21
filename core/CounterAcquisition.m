@@ -9,9 +9,9 @@ classdef CounterAcquisition < handle
     
     properties
         interfaceNIDAQ;   % handle to hardware interface for counter
-        DwellTime = 0.005;
+        DwellTime;
         DutyCycle = 0.5;
-        NumberOfSamples = 11;
+        NumberOfSamples;
         CounterData;
         CountsPerSecond;
         LoopsUntilTimeOut;

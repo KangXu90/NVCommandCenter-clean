@@ -5,6 +5,9 @@ classdef TrackerCCNY < Tracker
         LaserControlLine
         ZController = 'Piezo';
         TargetList
+        TrackEnable 
+        % we put it here, because the TrckerCCNY
+        % is obj would used when tracking in NV commandcenter
     end
     
    methods
@@ -19,7 +22,7 @@ classdef TrackerCCNY < Tracker
 
             % next do the counter acquisition
            	obj.hCounterAcquisition.GetCountsPerSecond();
-            counts = obj.hCounterAcquisition.CountsPerSecond;
+            counts = obj.hCounterAcquisition.CountsPerSecond();
             
             
             % turn off the laser
@@ -34,16 +37,25 @@ classdef TrackerCCNY < Tracker
             [counts] = obj.GetCountsCurPos();
         end
         
+        function [counts] = GetCountsAtPos2D(obj,Pos)
+            counts = 0;
+            obj.hImageAcquisition.CursorPosition = Pos;
+
+            obj.hImageAcquisition.SetCursor2D();% added by kang for 2D scanning
+            [counts] = obj.GetCountsCurPos();
+        end
         
         function [] = laserOn(obj)
             obj.hwLaserController.stop();
             obj.hwLaserController.setLines(1,obj.LaserControlLine);
+            % obj.hwLaserState = 1;
             obj.hwLaserController.start();
         end
         
         function [] = laserOff(obj)
             obj.hwLaserController.stop();
             obj.hwLaserController.setLines(0,obj.LaserControlLine);
+            % obj.hwLaserState = 0;
             obj.hwLaserController.start();
         end
         %First Attempt at Z Tracking, iterates through points from -.3 to
@@ -77,7 +89,7 @@ classdef TrackerCCNY < Tracker
 %         end
         
         function [newRefPoint] = trackCenter(obj,jumpPoint)
-                
+            
                 %Make sure we are using correct ZController,
                % if use motor as z Controller (or xyz controller)
                %, could we used it to alignment the field?
@@ -154,7 +166,7 @@ classdef TrackerCCNY < Tracker
                     for k=1:7
                         thisPos = Nearest(k,:);
                         NNCounts(k) =  GetCountsAtPos(obj,thisPos);
-                        % NNCounts(k) =  GetCountsAtPos2D(obj,thisPos); % modified by kang to realize 2D scan
+                        NNCounts(k) =  GetCountsAtPos2D(obj,thisPos); % modified by kang to realize 2D scan
                     end
                     
                     % throw event that counts have been updated;
@@ -168,13 +180,21 @@ classdef TrackerCCNY < Tracker
                     % only these are included in the gradient calcualtion
                     bThresh = zeros(1,7);
                     bThresh(Inds) = 1;
-                    % bThresh(2:5)=0; % by Kang 20240115 tracking only on z direnctions
-                    %tracing commented by Daniela
                     
-                    %                      add by kang to tracking only on x and y direnctions
-                                         % bThresh(6) = 0;
-                                         % bThresh(7) = 0;
-                    
+                    % Build mask from TrackEnable
+                    axisMask = obj.TrackEnable;  % [trackX trackY trackZ]
+
+                    % bThresh 过滤 NN direction
+                    if ~axisMask(1)   % freeze X
+                        bThresh(2:3) = 0;
+                    end
+                    if ~axisMask(2)   % freeze Y
+                        bThresh(4:5) = 0;
+                    end
+                    if ~axisMask(3)   % freeze Z
+                        bThresh(6:7) = 0;
+                    end
+
                     % 3D deformed to 1D steps
                     stepVec = [1 obj.CurrentStepSize(1),...
                         -obj.CurrentStepSize(1),obj.CurrentStepSize(2),-obj.CurrentStepSize(2),...
@@ -192,7 +212,7 @@ classdef TrackerCCNY < Tracker
                         
                         % Update the reference position
                         G = [gradVec(2) + gradVec(3),gradVec(4)+gradVec(5),gradVec(6) + gradVec(7)];
-                        
+                        G = G .* axisMask;
                         % seems to be a bug with G/norm(G) giving NaN, so check to make
                         % sure the numbers are non-zero
                         if norm(G) < 1e-8
@@ -215,7 +235,7 @@ classdef TrackerCCNY < Tracker
                     obj.hImageAcquisition.CursorPosition = [PosX,PosY,PosZ] + jumpPoint;
 %                  
 %                 
-                    % obj.hImageAcquisition.SetCursor(); % added by kang only tracking 2D
+                    obj.hImageAcquisition.SetCursor(); % added by kang only tracking 2D
 
                 end
                 newRefPoint = [PosX,PosY,PosZ];
