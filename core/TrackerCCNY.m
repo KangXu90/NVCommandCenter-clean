@@ -17,16 +17,16 @@ classdef TrackerCCNY < Tracker
         
         function [counts] = GetCountsCurPos(obj)
             
-            % first turn on the laser
-            obj.laserOn();
+            initialLaserState = obj.hwLaserState;
+            cleanupObj = [];
+            if ~initialLaserState
+                obj.laserOn();
+                cleanupObj = onCleanup(@()laserOff(obj));
+            end
 
             % next do the counter acquisition
            	obj.hCounterAcquisition.GetCountsPerSecond();
             counts = obj.hCounterAcquisition.CountsPerSecond();
-            
-            
-            % turn off the laser
-            obj.laserOff();
         end
         
         function [counts] = GetCountsAtPos(obj,Pos)
@@ -48,14 +48,14 @@ classdef TrackerCCNY < Tracker
         function [] = laserOn(obj)
             obj.hwLaserController.stop();
             obj.hwLaserController.setLines(1,obj.LaserControlLine);
-            % obj.hwLaserState = 1;
+            obj.hwLaserState = 1;
             obj.hwLaserController.start();
         end
         
         function [] = laserOff(obj)
             obj.hwLaserController.stop();
             obj.hwLaserController.setLines(0,obj.LaserControlLine);
-            % obj.hwLaserState = 0;
+            obj.hwLaserState = 0;
             obj.hwLaserController.start();
         end
         %First Attempt at Z Tracking, iterates through points from -.3 to
@@ -90,6 +90,12 @@ classdef TrackerCCNY < Tracker
         
         function [newRefPoint] = trackCenter(obj,jumpPoint)
             
+                initialLaserState = obj.hwLaserState;
+                cleanupObj = onCleanup(@()RestoreLaserState(obj,initialLaserState));
+                if ~obj.hwLaserState
+                    obj.laserOn();
+                end
+
                 %Make sure we are using correct ZController,
                % if use motor as z Controller (or xyz controller)
                %, could we used it to alignment the field?
@@ -166,7 +172,7 @@ classdef TrackerCCNY < Tracker
                     for k=1:7
                         thisPos = Nearest(k,:);
                         NNCounts(k) =  GetCountsAtPos(obj,thisPos);
-                        NNCounts(k) =  GetCountsAtPos2D(obj,thisPos); % modified by kang to realize 2D scan
+                        % NNCounts(k) =  GetCountsAtPos2D(obj,thisPos); % modified by kang to realize 2D scan
                     end
                     
                     % throw event that counts have been updated;
@@ -240,7 +246,15 @@ classdef TrackerCCNY < Tracker
                 end
                 newRefPoint = [PosX,PosY,PosZ];
         end % trackCenter
-        
+
+        function RestoreLaserState(obj,laserState)
+            if laserState && ~obj.hwLaserState
+                obj.laserOn();
+            elseif ~laserState && obj.hwLaserState
+                obj.laserOff();
+            end
+        end
+
         function setAbort(obj,evnt)
             obj.hasAborted = 1;
         end
