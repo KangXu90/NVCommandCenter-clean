@@ -217,6 +217,15 @@ function editAverages_Callback(hObject, eventdata, handles)
 %        str2double(get(hObject,'String')) returns contents of editAverages as a double
 
 
+function Averages = readAverages(handles, previousAverages)
+Averages = str2double(get(handles.editAverages,'String'));
+if isnan(Averages) || ~isfinite(Averages) || Averages < 1
+    Averages = previousAverages;
+    return;
+end
+Averages = floor(Averages);
+
+
 % --- Executes during object creation, after setting all properties.
 function editAverages_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to editAverages (see GCBO)
@@ -307,7 +316,7 @@ if get(handles.cbTrackEnable,'Value'), % if tracking turned on...
 end
 
 % look over the number of averages
-Averages = str2double(get(handles.editAverages,'String'));
+Averages = readAverages(handles,1);
 Samples = str2double(get(handles.editSequenceSamples,'String'));
 
 promodeselec = get(handles.pnlProcessMode,'SelectedObject');
@@ -478,7 +487,7 @@ switch Mode
         if  ConfigVoltageForRange 
         sr_baseband = 1.125e9;
         AmpGain = 40; % percent
-        voltage_below3GHz = 0.1;
+        voltage_below3GHz = 0.2;
         voltage_above3GHz = 0.4;
 
         fopen(MAMP);
@@ -881,7 +890,13 @@ switch Mode
 end %switch
 refPoint = [0,0,0];
 k = 1;
-while k<=Averages
+while true
+    drawnow limitrate
+    Averages = readAverages(handles,Averages);
+    myCounter.NAverages = Averages;
+    if k>Averages
+        break;
+    end
 
     tic
     if myCounter.hasAborted
