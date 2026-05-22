@@ -1894,6 +1894,7 @@ try
     end
 catch
 end
+handles.PulseSequence = src;
 PulseSequencerFunctions('DrawSequenceExternal',handles.axesPulseSequence,src);
 set(handles.textSeqName,'String',src.SequenceName);
 handles = UpdateAutoFilename(handles);
@@ -2161,11 +2162,11 @@ if isfield(handles,'PulseGenerator'),
     set(handles.textClockRate,'String',sprintf('%.3f MHz',handles.PulseGenerator.ClockRate/1e6));
 end
 
-folderPath = 'C:\Users\meriles\Documents\OriginLab\User Files';  % Change this to your folder path
-% Get the list of .ogwu files in the folder
-ogwuFiles = dir(fullfile(folderPath, '*.ogwu'));
-fileNames = {ogwuFiles.name};
-set(handles.popupmenuTempelate,'string',fileNames);
+RefreshOriginTemplatePopup(handles.popupmenuTempelate,handles);
+try
+    set(handles.popupmenuTempelate,'ButtonDownFcn',@(hObject,eventdata)RefreshOriginTemplatePopup(hObject,guidata(hObject)));
+catch
+end
 
 % % load in the code snipets
 % W = what('snippets');
@@ -3303,6 +3304,7 @@ end
 exportXls([fn, '.xls'], Exp);
 
 if get(handles.plotinOriginCheckbox, 'value')
+    RefreshOriginTemplatePopup(handles.popupmenuTempelate,handles);
     s = get(handles.popupmenuTempelate,'String');
     Mode = s{get(handles.popupmenuTempelate,'Value')};
     CreatePlotInOrigin([fn, '.xls'],Mode)
@@ -3711,11 +3713,18 @@ signalgeneratordata = table(str2double(Exp.SignalGenerator.Amplitude),...
 counterdata = table(Exp.Counter.NSamples, Exp.Counter.AvgIndex, ...
     'VariableNames', {'NSamples', 'AvgIndex'});
 
-targetlist = Exp.CurrentTracker.TargetList;
-% Assuming targetlist is a matrix, counterdata and signalgeneratordata are tables
-
-% Convert targetlist to a table
-targetlistTable = array2table(targetlist, 'VariableNames', {'x', 'y', 'z', 'targetnumber'});
+targetlist = [];
+try
+    targetlist = Exp.CurrentTracker.TargetList;
+catch
+end
+targetlistTable = table();
+if ~isempty(targetlist)
+    if size(targetlist,2) < 4
+        targetlist(:,end+1:4) = nan;
+    end
+    targetlistTable = array2table(targetlist(:,1:4), 'VariableNames', {'x', 'y', 'z', 'targetnumber'});
+end
 
 % List of all unique column names
 allColumnNames = union(union(targetlistTable.Properties.VariableNames, counterdata.Properties.VariableNames), signalgeneratordata.Properties.VariableNames);
@@ -3748,7 +3757,7 @@ originObj=actxserver('Origin.ApplicationSI');
 originObj.Execute('doc -mc 1;');
 
 % Load the tempelate
-strPath = 'C:\Users\Meriles\Documents\OriginLab\User Files\';
+strPath = [OriginTemplateFolder(),filesep];
 originObj.Load(strcat(strPath, tempelateName));
 
 % % update the data file path
@@ -3798,6 +3807,7 @@ function popupmenuTempelate_Callback(hObject, eventdata, handles)
 % Hints: contents = cellstr(get(hObject,'String')) returns popupmenuTempelate contents as cell array
 %        contents{get(hObject,'Value')} returns selected item from popupmenuTempelate
 
+RefreshOriginTemplatePopup(hObject,handles);
 
 
 
@@ -3812,3 +3822,37 @@ function popupmenuTempelate_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+function RefreshOriginTemplatePopup(hObject,handles)
+if isempty(hObject) || ~ishandle(hObject)
+    return;
+end
+folderPath = OriginTemplateFolder();
+ogwuFiles = dir(fullfile(folderPath, '*.ogwu'));
+fileNames = {ogwuFiles.name};
+if isempty(fileNames)
+    fileNames = {'No .ogwu templates found'};
+end
+oldSelection = '';
+try
+    oldStrings = get(hObject,'String');
+    oldValue = get(hObject,'Value');
+    if ischar(oldStrings)
+        oldStrings = cellstr(oldStrings);
+    end
+    if ~isempty(oldStrings) && oldValue <= numel(oldStrings)
+        oldSelection = oldStrings{oldValue};
+    end
+catch
+end
+newValue = 1;
+if ~isempty(oldSelection)
+    selectedIndex = find(strcmp(fileNames,oldSelection),1);
+    if ~isempty(selectedIndex)
+        newValue = selectedIndex;
+    end
+end
+set(hObject,'String',fileNames,'Value',newValue);
+
+function folderPath = OriginTemplateFolder()
+folderPath = 'C:\Users\meriles\Documents\OriginLab\User Files';
