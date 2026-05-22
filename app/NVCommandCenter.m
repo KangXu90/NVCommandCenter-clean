@@ -77,6 +77,7 @@ InitEvents(hObject,handles);
 handles = InitDevices(handles);
 
 InitGUI(hObject,handles);
+handles = InitConfigMenu(hObject,handles);
 
 % Update handles structure
 guidata(hObject, handles);
@@ -1985,6 +1986,183 @@ if ~isequal(fn,0)
     save(fn,'Exp');
 end
 
+function handles = InitConfigMenu(hObject,handles)
+existingMenu = findall(handles.figure1,'Tag','menuNVConfiguration');
+if ~isempty(existingMenu)
+    handles.menuNVConfiguration = existingMenu(1);
+    return;
+end
+handles.menuNVConfiguration = uimenu(handles.figure1,'Label','Configuration','Tag','menuNVConfiguration');
+uimenu(handles.menuNVConfiguration,'Label','Save Configuration...','Tag','menuSaveNVConfiguration',...
+    'Callback',@(hObject,eventdata)menuSaveConfig_Callback(hObject,eventdata,guidata(hObject)));
+uimenu(handles.menuNVConfiguration,'Label','Load Configuration...','Tag','menuLoadNVConfiguration',...
+    'Callback',@(hObject,eventdata)menuLoadConfig_Callback(hObject,eventdata,guidata(hObject)));
+
+function menuSaveConfig_Callback(hObject,eventdata,handles)
+Config = BuildNVConfiguration(handles);
+defaultPath = GetConfigDefaultPath();
+defaultName = ['NVCommandCenterConfig_',datestr(now,'yyyymmdd_HH-MM-SS'),'.mat'];
+[fn,fp] = uiputfile('*.mat','Save NVCommandCenter Configuration',fullfile(defaultPath,defaultName));
+if isequal(fn,0)
+    return;
+end
+setpref('nv','DefaultConfigSavePath',fp);
+fn = BuildUniqueFilename(fullfile(fp,fn));
+save(fn,'Config');
+SetStatus(handles,sprintf('Configuration saved: %s',fn));
+
+function menuLoadConfig_Callback(hObject,eventdata,handles)
+defaultPath = GetConfigDefaultPath();
+[fn,fp] = uigetfile('*.mat','Load NVCommandCenter Configuration',defaultPath);
+if isequal(fn,0)
+    return;
+end
+data = load(fullfile(fp,fn));
+if ~isfield(data,'Config')
+    errordlg('Selected file does not contain a Config variable.','Load Configuration');
+    return;
+end
+setpref('nv','DefaultConfigSavePath',fp);
+handles = ApplyNVConfiguration(handles,data.Config);
+InitEvents(handles.figure1,handles);
+handles = updatePulseSequence(handles.PulseSequence,[],handles);
+InitGUI(handles.figure1,handles);
+handles = UpdateAutoFilename(handles);
+guidata(handles.figure1,handles);
+SetStatus(handles,sprintf('Configuration loaded: %s',fullfile(fp,fn)));
+
+function defaultPath = GetConfigDefaultPath()
+if ispref('nv','DefaultConfigSavePath')
+    defaultPath = getpref('nv','DefaultConfigSavePath');
+else
+    defaultPath = pwd;
+end
+
+function Config = BuildNVConfiguration(handles)
+Config.Version = 1;
+Config.Created = datestr(now);
+Config.GUI = CaptureGUIControls(handles);
+Config.PulseSequence = handles.PulseSequence;
+Config.InitPulseSequence = handles.InitPulseSequence;
+Config.SignalGenerator = CaptureObjectProperties(handles,'SignalGenerator',SignalGeneratorConfigFields());
+Config.Tabor = CaptureObjectProperties(handles,'TEProteusInst',TaborConfigFields());
+
+function handles = ApplyNVConfiguration(handles,Config)
+if isfield(Config,'PulseSequence')
+    handles.PulseSequence = Config.PulseSequence;
+end
+if isfield(Config,'InitPulseSequence')
+    handles.InitPulseSequence = Config.InitPulseSequence;
+end
+if isfield(Config,'GUI')
+    handles = ApplyGUIControls(handles,Config.GUI);
+end
+if isfield(Config,'SignalGenerator')
+    handles = ApplyObjectProperties(handles,'SignalGenerator',Config.SignalGenerator);
+end
+if isfield(Config,'Tabor')
+    handles = ApplyObjectProperties(handles,'TEProteusInst',Config.Tabor);
+end
+
+function GUI = CaptureGUIControls(handles)
+controlNames = GUIConfigControlNames();
+GUI = struct();
+for k = 1:numel(controlNames)
+    name = controlNames{k};
+    if isfield(handles,name) && ishandle(handles.(name))
+        try
+            GUI.(name).String = get(handles.(name),'String');
+        catch
+        end
+        try
+            GUI.(name).Value = get(handles.(name),'Value');
+        catch
+        end
+    end
+end
+if isfield(handles,'popupmenuTempelate') && ishandle(handles.popupmenuTempelate)
+    strings = get(handles.popupmenuTempelate,'String');
+    value = get(handles.popupmenuTempelate,'Value');
+    if ischar(strings)
+        strings = cellstr(strings);
+    end
+    if ~isempty(strings) && value <= numel(strings)
+        GUI.popupmenuTempelate.SelectedString = strings{value};
+    end
+end
+
+function handles = ApplyGUIControls(handles,GUI)
+controlNames = fieldnames(GUI);
+for k = 1:numel(controlNames)
+    name = controlNames{k};
+    if ~isfield(handles,name) || ~ishandle(handles.(name))
+        continue;
+    end
+    if isfield(GUI.(name),'String') && ~strcmp(name,'popupmenuTempelate')
+        try
+            set(handles.(name),'String',GUI.(name).String);
+        catch
+        end
+    end
+    if isfield(GUI.(name),'Value')
+        try
+            set(handles.(name),'Value',GUI.(name).Value);
+        catch
+        end
+    end
+end
+if isfield(handles,'popupmenuTempelate') && ishandle(handles.popupmenuTempelate)
+    RefreshOriginTemplatePopup(handles.popupmenuTempelate,handles);
+    if isfield(GUI,'popupmenuTempelate') && isfield(GUI.popupmenuTempelate,'SelectedString')
+        strings = get(handles.popupmenuTempelate,'String');
+        if ischar(strings)
+            strings = cellstr(strings);
+        end
+        selectedIndex = find(strcmp(strings,GUI.popupmenuTempelate.SelectedString),1);
+        if ~isempty(selectedIndex)
+            set(handles.popupmenuTempelate,'Value',selectedIndex);
+        end
+    end
+end
+
+function fields = GUIConfigControlNames()
+fields = {'popupMode','editSequenceSamples','editAverages','cbTrackEnable',...
+    'popupTrackFreq','editTrackThreshold','filenameEdit','prenameEdit',...
+    'filepathEdit','plotinOriginCheckbox','popupmenuTempelate','textPiPulse'};
+
+function data = CaptureObjectProperties(handles,objectName,fields)
+data = struct();
+if ~isfield(handles,objectName)
+    return;
+end
+obj = handles.(objectName);
+for k = 1:numel(fields)
+    fieldName = fields{k};
+    value = GetObjectProperty(obj,fieldName,[]);
+    if ~isempty(value) || IsObjectProperty(obj,fieldName)
+        data.(fieldName) = value;
+    end
+end
+
+function handles = ApplyObjectProperties(handles,objectName,data)
+if ~isfield(handles,objectName)
+    return;
+end
+fields = fieldnames(data);
+for k = 1:numel(fields)
+    SetObjectProperty(handles.(objectName),fields{k},data.(fields{k}));
+end
+
+function fields = SignalGeneratorConfigFields()
+fields = {'Frequency','Frequency1','Frequency2','Amplitude','Amplitude1','Amplitude2',...
+    'SweepStart','SweepStop','SweepPoints','SweepStart1','SweepStop1','SweepPoints1',...
+    'SweepStart2','SweepStop2','SweepPoints2'};
+
+function fields = TaborConfigFields()
+fields = {'Frequency','Frequency1','Frequency2','Amplitude','Amplitude1','Amplitude2',...
+    'SweepStart','SweepStop','SweepPoints','SweepStart1','SweepStop1','SweepPoints1',...
+    'SweepStart2','SweepStop2','SweepPoints2','SweepZoneState1','SweepZoneState2'};
+
 
 function abortRun(hObject,eventdata,handles)
 % stop SG output
@@ -3578,6 +3756,19 @@ try
     value = obj.(propName);
 catch
     value = defaultValue;
+end
+
+function tf = IsObjectProperty(obj,propName)
+try
+    tf = any(strcmp(properties(obj),propName));
+catch
+    tf = false;
+end
+
+function SetObjectProperty(obj,propName,value)
+try
+    obj.(propName) = value;
+catch
 end
 
 function out = SanitizeFilenamePart(in)
