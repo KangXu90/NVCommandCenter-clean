@@ -1885,10 +1885,18 @@ handles.nvccEvents = addlistener(handles.PulseSequence,'PulseSeqeunceChangedStat
 
 
 
-function updatePulseSequence(src,event,handles)
+function handles = updatePulseSequence(src,event,handles)
 
+try
+    currentHandles = guidata(handles.figure1);
+    if isstruct(currentHandles)
+        handles = currentHandles;
+    end
+catch
+end
 PulseSequencerFunctions('DrawSequenceExternal',handles.axesPulseSequence,src);
 set(handles.textSeqName,'String',src.SequenceName);
+handles = UpdateAutoFilename(handles);
 
 
 % --- Executes on button press in pbLoadPS.
@@ -1905,7 +1913,7 @@ if fn,
     handles.PulseSequence = PSeq;
 
     InitEvents(hObject,handles);
-    updatePulseSequence(handles.PulseSequence,[],handles);
+    handles = updatePulseSequence(handles.PulseSequence,[],handles);
     guidata(hObject,handles);
 end
 
@@ -1948,16 +1956,18 @@ function [fn,Exp] = menuSave_Callback(hObject, eventdata, handles)
 % hObject    handle to menuSave (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+handles = UpdateAutoFilename(handles);
+guidata(hObject,handles);
 Exp = Experiment(handles.PulseGenerator,handles.SignalGenerator,handles.Counter,handles.PulseSequence,handles.Tracker,handles.popupMode.Value);
 Exp.Notes = handles.note;
 Exp.SpecialData = handles.specialData;
 Exp.SpecialVec = handles.specialVec;
 Exp.TimeVector = handles.TimeVector;
 
-[fn]= SaveExp(Exp);
+[fn]= SaveExp(Exp,handles);
 
 
-function [fn] = SaveExp(Exp)
+function [fn] = SaveExp(Exp,handles)
 
 if ispref('nv','DefaultExpSavePath');
     fp = getpref('nv','DefaultExpSavePath');
@@ -1965,9 +1975,10 @@ else
     fp = '';
 end
 
-fn = ['Exp_',datestr(now,'yyyymmdd_HH-MM-SS')];
+fn = BuildSaveFilename(handles);
 [fn,fp] = uiputfile('*.mat',fullfile(fp,fn));
-if ~isempty(fn),
+if ~isequal(fn,0)
+    fn = BuildSaveFilenameFromName(handles,fn);
     fn = fullfile(fp,fn);
     save(fn,'Exp');
 end
@@ -3256,6 +3267,8 @@ function autosaveButton_Callback(hObject, eventdata, handles)
 % hObject    handle to autosaveButton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+handles = UpdateAutoFilename(handles);
+guidata(hObject,handles);
 try
     prename = get(handles.prenameEdit,'string');
 catch
@@ -3264,11 +3277,15 @@ end
 filename = get(handles.filenameEdit,'string');
 filepath = get(handles.filepathEdit,'string');
 if  isempty(filename)||isempty(filepath)
-    fn = ['Exp_', datestr(now, 'yyyymmdd_HH-MM-SS')];
+    fn = BuildSaveFilename(handles,['Exp_', datestr(now, 'yyyymmdd_HH-MM-SS')]);
     [fn, fp] = uiputfile('*.mat',fullfile(filepath, fn));
+    if isequal(fn,0)
+        return;
+    end
+    fn = BuildSaveFilenameFromName(handles,fn);
     fn = fullfile(fp, fn);
 else
-    fn = strcat(prename, filename);
+    fn = BuildSaveFilename(handles,filename,prename);
     fn = fullfile(filepath,fn);
 end
 Exp = Experiment(handles.PulseGenerator,handles.SignalGenerator,handles.Counter,handles.PulseSequence,handles.Tracker);
@@ -3299,6 +3316,243 @@ end
 %         CreatePlotInOrigin([fn, '.xls'],'NV-correlation-Sindamp&FFT-xls.ogwu')
 %     end
 
+
+function handles = UpdateAutoFilename(handles)
+if ~isfield(handles,'filenameEdit') || ~ishandle(handles.filenameEdit)
+    return;
+end
+autoFilename = BuildExperimentFilenameCore(handles);
+if isempty(autoFilename)
+    return;
+end
+currentFilename = get(handles.filenameEdit,'String');
+oldAutoFilename = '';
+if isfield(handles,'AutoFilenamePart')
+    oldAutoFilename = handles.AutoFilenamePart;
+end
+filename = MergeAutoFilenamePart(currentFilename,oldAutoFilename,autoFilename);
+set(handles.filenameEdit,'String',filename);
+handles.AutoFilenamePart = autoFilename;
+try
+    guidata(handles.figure1,handles);
+catch
+end
+
+function filename = MergeAutoFilenamePart(currentFilename,oldAutoFilename,autoFilename)
+if isempty(currentFilename)
+    filename = autoFilename;
+    return;
+end
+if ~isempty(oldAutoFilename)
+    idx = strfind(currentFilename,oldAutoFilename);
+    if ~isempty(idx)
+        startIdx = idx(1);
+        filename = [currentFilename(1:startIdx-1),autoFilename,currentFilename(startIdx+length(oldAutoFilename):end)];
+        filename = regexprep(filename,'_+','_');
+        filename = regexprep(filename,'^_','');
+        filename = regexprep(filename,'_$','');
+        return;
+    end
+end
+if ~isempty(strfind(currentFilename,autoFilename))
+    filename = currentFilename;
+    return;
+end
+if strcmp(currentFilename,autoFilename)
+    filename = autoFilename;
+else
+    filename = [currentFilename,'_',autoFilename];
+    filename = regexprep(filename,'_+','_');
+    filename = regexprep(filename,'_$','');
+end
+
+function filename = BuildExperimentFilenameCore(handles)
+sequenceName = GetSequenceName(handles);
+sequenceName = SanitizeFilenamePart(sequenceName);
+if isempty(sequenceName)
+    sequenceName = 'Sequence';
+end
+
+if ~isempty(strfind(upper(sequenceName),'ODMR'))
+    filename = [sequenceName,'_',BuildTaborSweepName(handles)];
+elseif ~isempty(strfind(upper(sequenceName),'RABI'))
+    filename = [sequenceName,'_',BuildTaborFrequencyName(handles),'_',BuildPulseSweepName(handles)];
+else
+    filename = [sequenceName,'_',BuildPiName(handles),'_',BuildPulseSweepName(handles)];
+end
+filename = regexprep(filename,'_+','_');
+filename = regexprep(filename,'_$','');
+
+function filename = BuildSaveFilename(handles,defaultName,prename)
+if nargin < 2
+    defaultName = '';
+    try
+        defaultName = get(handles.filenameEdit,'String');
+    catch
+    end
+    if isempty(defaultName)
+        defaultName = ['Exp_',datestr(now,'yyyymmdd_HH-MM-SS')];
+    end
+end
+if nargin < 3
+    prename = '';
+    try
+        prename = get(handles.prenameEdit,'String');
+    catch
+    end
+end
+baseName = defaultName;
+if nargin < 2 || isempty(baseName)
+    baseName = BuildExperimentFilenameCore(handles);
+end
+filename = BuildSaveFilenameFromName(handles,[prename,baseName]);
+
+function filename = BuildSaveFilenameFromName(handles,filename)
+[~,name,ext] = fileparts(filename);
+if isempty(name)
+    name = ['Exp_',datestr(now,'yyyymmdd_HH-MM-SS')];
+end
+name = regexprep(name,'_samp[^_]*_avg[^_]*$','');
+samples = SanitizeFilenamePart(get(handles.editSequenceSamples,'String'));
+averages = SanitizeFilenamePart(get(handles.editAverages,'String'));
+if isempty(samples)
+    samples = 'Unknown';
+end
+if isempty(averages)
+    averages = 'Unknown';
+end
+filename = [name,'_samp',samples,'_avg',averages];
+if isempty(ext)
+    ext = '.mat';
+end
+filename = [filename,ext];
+
+function sequenceName = GetSequenceName(handles)
+sequenceName = '';
+if isfield(handles,'PulseSequence') && isprop(handles.PulseSequence,'SequenceName')
+    sequenceName = handles.PulseSequence.SequenceName;
+end
+
+function part = BuildTaborSweepName(handles)
+parts = {};
+if isfield(handles,'TEProteusInst')
+    tabor = handles.TEProteusInst;
+    if IsTruthy(GetObjectProperty(tabor,'SweepZoneState1',0))
+        parts{end+1} = sprintf('f%s-to-%s_pts%s',FormatFrequency(GetObjectProperty(tabor,'SweepStart1',NaN)),FormatFrequency(GetObjectProperty(tabor,'SweepStop1',NaN)),FormatNumber(GetObjectProperty(tabor,'SweepPoints1',NaN)));
+    end
+    if IsTruthy(GetObjectProperty(tabor,'SweepZoneState2',0))
+        parts{end+1} = sprintf('f%s-to-%s_pts%s',FormatFrequency(GetObjectProperty(tabor,'SweepStart2',NaN)),FormatFrequency(GetObjectProperty(tabor,'SweepStop2',NaN)),FormatNumber(GetObjectProperty(tabor,'SweepPoints2',NaN)));
+    end
+end
+if isempty(parts)
+    part = 'fSweep';
+else
+    part = parts{1};
+    for k = 2:numel(parts)
+        part = [part,'_',parts{k}];
+    end
+end
+
+function part = BuildTaborFrequencyName(handles)
+frequency = NaN;
+if isfield(handles,'TEProteusInst')
+    frequency = GetObjectProperty(handles.TEProteusInst,'Frequency1',NaN);
+end
+if isnan(ToDouble(frequency))
+    part = 'fUnknown';
+else
+    part = ['f',FormatFrequency(frequency)];
+end
+
+function part = BuildPulseSweepName(handles)
+if isfield(handles,'PulseSequence') && ~isempty(handles.PulseSequence.Sweeps)
+    swp = handles.PulseSequence.Sweeps(1);
+    part = sprintf('sweep%s-to-%s_pts%s',FormatSweepValue(swp.StartValue),FormatSweepValue(swp.StopValue),FormatNumber(swp.SweepPoints));
+else
+    part = 'sweep';
+end
+
+function part = BuildPiName(handles)
+piValue = [];
+if isfield(handles,'textPiPulse') && ishandle(handles.textPiPulse)
+    piText = get(handles.textPiPulse,'String');
+    tokens = regexp(piText,'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?','match');
+    if ~isempty(tokens)
+        piValue = str2double(tokens{1});
+    end
+end
+if isempty(piValue) || isnan(piValue)
+    part = 'pi';
+else
+    part = ['pi',FormatSweepValue(piValue)];
+end
+
+function out = FormatFrequency(value)
+value = ToDouble(value);
+if isnan(value)
+    out = 'Unknown';
+elseif abs(value) >= 1e9
+    out = [FormatNumber(value/1e9),'GHz'];
+elseif abs(value) >= 1e6
+    out = [FormatNumber(value/1e6),'MHz'];
+else
+    out = [FormatNumber(value),'Hz'];
+end
+
+function out = FormatSweepValue(value)
+value = ToDouble(value);
+if isnan(value)
+    out = 'Unknown';
+elseif abs(value) > 0 && abs(value) < 1e-6
+    out = [FormatNumber(value*1e9),'ns'];
+elseif abs(value) >= 1e-6 && abs(value) < 1e-3
+    out = [FormatNumber(value*1e6),'us'];
+elseif abs(value) >= 1e-3 && abs(value) < 1
+    out = [FormatNumber(value*1e3),'ms'];
+else
+    out = FormatNumber(value);
+end
+
+function out = FormatNumber(value)
+value = ToDouble(value);
+if isnan(value)
+    out = 'Unknown';
+elseif abs(value-round(value)) < 1e-9
+    out = sprintf('%.0f',value);
+else
+    out = sprintf('%.4g',value);
+end
+out = strrep(out,'.','p');
+out = strrep(out,'+','');
+
+function value = ToDouble(value)
+if ischar(value)
+    value = str2double(value);
+end
+
+function tf = IsTruthy(value)
+if ischar(value)
+    tf = strcmpi(value,'on') || strcmpi(value,'true') || strcmp(value,'1');
+else
+    tf = logical(value);
+end
+
+function value = GetObjectProperty(obj,propName,defaultValue)
+try
+    value = obj.(propName);
+catch
+    value = defaultValue;
+end
+
+function out = SanitizeFilenamePart(in)
+if isempty(in)
+    out = '';
+    return;
+end
+if isnumeric(in)
+    in = num2str(in);
+end
+out = regexprep(strtrim(in),'[^\w\-.]','_');
 
 % --- Executes on button press in selectfolderButton.
 function selectfolderButton_Callback(~, eventdata, handles)
