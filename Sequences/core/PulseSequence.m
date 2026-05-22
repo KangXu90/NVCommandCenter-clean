@@ -385,7 +385,12 @@ classdef PulseSequence < handle
 %             else
 %                 obj = PulseSequence(a.Channels,a.Groups,a.Sweeps,a.SweepIndex,a.SequenceName);
 %             end
-            obj = PulseSequence(a.Channels,a.Groups,a.Sweeps,a.SweepIndex,a.SequenceName);
+            try
+                sequenceName = a.SequenceName;
+            catch
+                sequenceName = '';
+            end
+            obj = PulseSequence(a.Channels,a.Groups,a.Sweeps,a.SweepIndex,sequenceName);
 
         end
     end

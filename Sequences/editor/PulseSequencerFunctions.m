@@ -95,7 +95,6 @@ switch action
 
             %replace copy with constructor
             handles.PSeq.copy(PSeq);
-            handles.PSeq.SequenceName = fn;
             guidata(hObject,handles);
 
             set(handles.textSequence,'String',fn,'Tooltip',fullfile(fp,fn));
@@ -154,6 +153,14 @@ switch action
         handles = varargin{4};
         
         UpdateGroupInput(handles,handles.PSeq);
+
+    case 'UpdateSequenceName'
+
+        hObject = varargin{2};
+        eventdata = varargin{3};
+        handles = varargin{4};
+
+        UpdateSequenceNameInput(hObject,handles);
         
     case 'SetHWChannelPopup',
         hObject = varargin{2};
@@ -228,6 +235,8 @@ UpdateGroups(handles,PSeq);
 UpdatePulseEvents(handles,PSeq);
 
 UpdateSweepSlider(handles,PSeq);
+
+UpdateSequenceNameControl(handles,PSeq);
 
 handles.listener = addlistener(handles.PSeq,'PulseSeqeunceChangedState',@(src,evnt)PulseSequencerFunctions('EventPSChangeState',src,evnt,hObject));
 guidata(hObject,handles);
@@ -725,6 +734,24 @@ function UpdateGroupInput(handles,PSeq)
         if grp > 0
                 PSeq.Groups(grp).setGroupProperties(name,se,ee,loops);
         end
+
+function UpdateSequenceNameControl(handles,PSeq)
+
+    if isfield(handles,'editSequencename') && ishandle(handles.editSequencename)
+        if isprop(PSeq,'SequenceName') && ~isempty(PSeq.SequenceName)
+            set(handles.editSequencename,'String',PSeq.SequenceName);
+        else
+            set(handles.editSequencename,'String','');
+        end
+    end
+
+function UpdateSequenceNameInput(hObject,handles)
+
+    if isfield(handles,'PSeq') && isprop(handles.PSeq,'SequenceName')
+        handles.PSeq.SequenceName = get(hObject,'String');
+        guidata(hObject,handles);
+        notify(handles.PSeq,'PulseSeqeunceChangedState');
+    end
         
 function UpdateHWChannelPopup(handles,PSeq)
 

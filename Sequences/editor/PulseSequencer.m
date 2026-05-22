@@ -22,7 +22,7 @@ function varargout = PulseSequencer(varargin)
 
 % Edit the above text to modify the response to help PulseSequencer
 
-% Last Modified by GUIDE v2.5 27-Jun-2024 18:18:05
+% Last Modified by GUIDE v2.5 22-May-2026 14:06:39
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -3450,6 +3450,30 @@ PulseSequencerFunctions('UpdateRiseInput',hObject, eventdata, handles)
 % --- Executes during object creation, after setting all properties.
 function editSweepMulti_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to editSweepMulti (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function editSequencename_Callback(hObject, eventdata, handles)
+% hObject    handle to editSequencename (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of editSequencename as text
+%        str2double(get(hObject,'String')) returns contents of editSequencename as a double
+PulseSequencerFunctions('UpdateSequenceName',hObject,eventdata,handles);
+
+
+% --- Executes during object creation, after setting all properties.
+function editSequencename_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to editSequencename (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
 
