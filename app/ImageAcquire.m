@@ -95,6 +95,7 @@ handles = InitDevices(handles);
 axes(handles.imageAxes);
 handles.xcrosshair = NaN;
 handles.ycrosshair = NaN;
+handles.targetCrosshairHandles = [];
 
 
 set(handles.text_curPosZ,'String','Z (um)');
@@ -764,6 +765,7 @@ else
     axisRange = linspace(cImage.ScanData.MinValues(curaxis),cImage.ScanData.MaxValues(curaxis),cImage.ScanData.NumPoints(curaxis));
     plot(axisRange,cImage.ImageData,'-b.','Parent',handles.imageAxes);
 end
+UpdateTargetCrosshairs(handles);
 
 function DrawCrossHairsFromUpdate(src,evnt)
 
@@ -774,17 +776,25 @@ handles = guidata(gobj);
 %Try and get handles to the current lines
 lh1 = handles.xcrosshair;
 lh2 = handles.ycrosshair;
+existingCursorHairlines = findall(handles.imageAxes,'Tag','cursorHairline');
+if numel(existingCursorHairlines) > 2 || (~isempty(existingCursorHairlines) && (~ishandle(lh1) || ~ishandle(lh2)))
+    delete(existingCursorHairlines);
+    handles.xcrosshair = NaN;
+    handles.ycrosshair = NaN;
+    lh1 = NaN;
+    lh2 = NaN;
+end
 
 %If they don't exist then create them
 if ~ishandle(lh1)
-   lh1 = line([0 0],[0 0],[0 0],'Parent',handles.imageAxes);
+   lh1 = line([0 0],[0 0],[0 0],'Parent',handles.imageAxes,'Color','w','Tag','cursorHairline');
    handles.xcrosshair = lh1;
    gobj = findall(0,'Name','ImageAcquire');
    guidata(gobj,handles);
 end
 
 if ~ishandle(lh2)
-   lh2 = line([0 0],[0 0],[0 0],'Parent',handles.imageAxes);
+   lh2 = line([0 0],[0 0],[0 0],'Parent',handles.imageAxes,'Color','w','Tag','cursorHairline');
    handles.ycrosshair = lh2;
    gobj = findall(0,'Name','ImageAcquire');
    guidata(gobj,handles);
@@ -812,8 +822,8 @@ CP = get(handles.imageAxes,'CurrentPoint');
 handles.ImageAcquisition.CursorPosition(1) = CP(1,1);
 handles.ImageAcquisition.CursorPosition(2) = CP(1,2);
 handles.ImageAcquisition.CursorPosition(3) = handles.ImageAcquisition.interfacePiezo.GetCurrentPosition();
-% handles.ImageAcquisition.SetCursor();
- handles.ImageAcquisition.SetCursor2D();
+handles.ImageAcquisition.SetCursor();
+% handles.ImageAcquisition.SetCursor2D();
 
 
 
@@ -959,8 +969,10 @@ guidata(gobj,handles);
 
 function updateTargetList(hObject,eventdata,handles)
 
+    targetList = [];
     try
-        targets = length(handles.Tracker.TargetList(:,1));
+        targetList = handles.Tracker.TargetList;
+        targets = size(targetList,1);
     catch error
         targets = 0;
     end
@@ -969,10 +981,15 @@ function updateTargetList(hObject,eventdata,handles)
     if((get(handles.popupTargetList,'Value') - 1)  > targets)
         set(handles.popupTargetList,'Value',1);
     end
-    targetCount = num2cell(handles.Tracker.TargetList(:,4));
+    if isempty(targetList)
+        targetCount = {};
+    else
+        targetCount = num2cell(targetList(:,4));
+    end
     targetCount = ['Select Target'; targetCount];
     %Set the popup menu
     set(handles.popupTargetList,'String',targetCount);
+    handles = UpdateTargetCrosshairs(handles);
 
     %Update the handles object
     gobj = findall(0,'Name','ImageAcquire');
@@ -1341,6 +1358,7 @@ catch ME
     end
 end
 handles.Tracker.addTarget(name,handles.ImageAcquisition.CursorPosition(1:3));
+handles = UpdateTargetCrosshairs(handles);
 
 
 % --- Executes on button press in buttonRemoveTarget.
@@ -1350,6 +1368,8 @@ function buttonRemoveTarget_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 % handles.Tracker.removeTarget(get(handles.popupTargetList,'Value')); %by kang
 handles.Tracker.removeTarget(get(handles.popupTargetList,'Value')-1);
+handles = ClearCursorHairline(handles);
+handles = UpdateTargetCrosshairs(handles);
 
 
 % --- Executes on button press in buttonTrackTarget.
@@ -1382,6 +1402,7 @@ function buttonGoToTarget_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 targetNumber = get(handles.popupTargetList,'Value')-1;
 handles.Tracker.goToTarget(targetNumber);
+handles = SetCursorToTarget(handles,targetNumber);
 
 
 % --- Executes on button press in buttonClearTargets.
@@ -1390,8 +1411,86 @@ function buttonClearTargets_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 handles.Tracker.clearTargets();
+handles = ClearCursorHairline(handles);
+handles = UpdateTargetCrosshairs(handles);
 % handles.Tracker.TargetList = [];
 % notify(handles.Tracker, 'TargetListUpdated');
+
+function handles = ClearCursorHairline(handles)
+if isfield(handles,'xcrosshair') && ishandle(handles.xcrosshair)
+    delete(handles.xcrosshair);
+end
+if isfield(handles,'ycrosshair') && ishandle(handles.ycrosshair)
+    delete(handles.ycrosshair);
+end
+if isfield(handles,'imageAxes') && ishandle(handles.imageAxes)
+    existingCursorHairlines = findall(handles.imageAxes,'Tag','cursorHairline');
+    if ~isempty(existingCursorHairlines)
+        delete(existingCursorHairlines);
+    end
+end
+handles.xcrosshair = NaN;
+handles.ycrosshair = NaN;
+gobj = findall(0,'Name','ImageAcquire');
+guidata(gobj,handles);
+
+function handles = SetCursorToTarget(handles,targetNumber)
+try
+    if targetNumber <= 0 || targetNumber > size(handles.Tracker.TargetList,1)
+        return;
+    end
+    handles = ClearCursorHairline(handles);
+    handles.ImageAcquisition.CursorPosition(1:3) = handles.Tracker.TargetList(targetNumber,1:3);
+    handles.ImageAcquisition.SetCursor();
+    set(handles.cursorX,'String',sprintf('%0.3f',handles.ImageAcquisition.CursorPosition(1)));
+    set(handles.cursorY,'String',sprintf('%0.3f',handles.ImageAcquisition.CursorPosition(2)));
+    set(handles.cursorZ,'String',sprintf('%0.4f',handles.ImageAcquisition.CursorPosition(3)));
+    gobj = findall(0,'Name','ImageAcquire');
+    guidata(gobj,handles);
+    DrawCrossHairsFromUpdate([],[]);
+catch
+end
+gobj = findall(0,'Name','ImageAcquire');
+guidata(gobj,handles);
+
+function handles = UpdateTargetCrosshairs(handles)
+if ~isfield(handles,'imageAxes') || ~ishandle(handles.imageAxes)
+    return;
+end
+existingTargetCrosshairs = findall(handles.imageAxes,'Tag','targetCrosshair');
+if ~isempty(existingTargetCrosshairs)
+    delete(existingTargetCrosshairs);
+end
+if isfield(handles,'targetCrosshairHandles')
+    validHandles = handles.targetCrosshairHandles(ishandle(handles.targetCrosshairHandles));
+    if ~isempty(validHandles)
+        delete(validHandles);
+    end
+end
+handles.targetCrosshairHandles = [];
+targetList = [];
+try
+    targetList = handles.Tracker.TargetList;
+catch
+end
+if ~isempty(targetList)
+    XLimits = get(handles.imageAxes,'XLim');
+    YLimits = get(handles.imageAxes,'YLim');
+    xHalfLength = abs(diff(XLimits))*0.025;
+    yHalfLength = abs(diff(YLimits))*0.025;
+    for k = 1:size(targetList,1)
+        xP = targetList(k,1);
+        yP = targetList(k,2);
+        handles.targetCrosshairHandles(end+1) = line([xP-xHalfLength,xP+xHalfLength],[yP,yP],...
+            'Parent',handles.imageAxes,'Color','m','LineStyle','-','LineWidth',3,...
+            'HitTest','off','Tag','targetCrosshair');
+        handles.targetCrosshairHandles(end+1) = line([xP,xP],[yP-yHalfLength,yP+yHalfLength],...
+            'Parent',handles.imageAxes,'Color','m','LineStyle','-','LineWidth',3,...
+            'HitTest','off','Tag','targetCrosshair');
+    end
+end
+gobj = findall(0,'Name','ImageAcquire');
+guidata(gobj,handles);
 
 
 
