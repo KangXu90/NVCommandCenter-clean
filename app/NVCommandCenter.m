@@ -1981,6 +1981,7 @@ fn = BuildSaveFilename(handles);
 if ~isequal(fn,0)
     fn = BuildSaveFilenameFromName(handles,fn);
     fn = fullfile(fp,fn);
+    fn = BuildUniqueFilename(fn);
     save(fn,'Exp');
 end
 
@@ -3289,6 +3290,7 @@ else
     fn = BuildSaveFilename(handles,filename,prename);
     fn = fullfile(filepath,fn);
 end
+fn = BuildUniqueFilename(fn,{'.xls'});
 Exp = Experiment(handles.PulseGenerator,handles.SignalGenerator,handles.Counter,handles.PulseSequence,handles.Tracker);
 Exp.Notes = handles.note;
 Exp.SpecialData = handles.specialData;
@@ -3428,6 +3430,38 @@ if isempty(ext)
     ext = '.mat';
 end
 filename = [filename,ext];
+
+function filename = BuildUniqueFilename(filename,relatedExtensions)
+if nargin < 2
+    relatedExtensions = {};
+end
+if ischar(relatedExtensions)
+    relatedExtensions = {relatedExtensions};
+end
+[folder,name,ext] = fileparts(filename);
+if isempty(ext)
+    ext = '.mat';
+end
+filename = fullfile(folder,[name,ext]);
+index = 1;
+while FileSetExists(filename,relatedExtensions)
+    filename = fullfile(folder,sprintf('%s_%d%s',name,index,ext));
+    index = index + 1;
+end
+
+function tf = FileSetExists(filename,relatedExtensions)
+tf = exist(filename,'file') == 2;
+if tf
+    return;
+end
+[folder,name] = fileparts(filename);
+for k = 1:numel(relatedExtensions)
+    relatedFilename = fullfile(folder,[name,relatedExtensions{k}]);
+    if exist(relatedFilename,'file') == 2
+        tf = true;
+        return;
+    end
+end
 
 function sequenceName = GetSequenceName(handles)
 sequenceName = '';
@@ -3754,7 +3788,7 @@ function CreatePlotInOrigin(fname,tempelateName)
 originObj=actxserver('Origin.ApplicationSI');
 
 % Make the Origin session visible
-originObj.Execute('doc -mc 1;');
+% originObj.Execute('doc -mc 1;');
 
 % Load the tempelate
 strPath = [OriginTemplateFolder(),filesep];
@@ -3855,4 +3889,4 @@ end
 set(hObject,'String',fileNames,'Value',newValue);
 
 function folderPath = OriginTemplateFolder()
-folderPath = 'C:\Users\meriles\Documents\OriginLab\User Files';
+folderPath = 'C:\Users\meriles\Documents\OriginLab\User Files\tempelateForNVcenter';
