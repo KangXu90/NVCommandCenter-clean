@@ -101,14 +101,31 @@ function uipushtool1_ClickedCallback(hObject, eventdata, handles)
 notify(handles.hTracker,'TrackerAbort');
 
 function updateStatus(handles,newString)
+    if ~isViewerHandleValid(handles,'textStatus')
+        return;
+    end
     hObject = findall(0,'Name','TrackingViewer');
+    if isempty(hObject) || ~ishandle(hObject(1))
+        return;
+    end
+    hObject = hObject(1);
     handles = guidata(hObject);
     handles.statusString{end+1} = newString;
+    if ~isViewerHandleValid(handles,'textStatus')
+        return;
+    end
     set(handles.textStatus,'String',handles.statusString);
     hObject = findall(0,'Name','TrackingViewer');
+    if isempty(hObject) || ~ishandle(hObject(1))
+        return;
+    end
+    hObject = hObject(1);
     guidata(hObject,handles);
 
 function plotNNCounts(handles,eData)
+    if ~isViewerHandleValid(handles,'axes1')
+        return;
+    end
     bar(handles.axes1,eData.NewData);
     drawnow;
     
@@ -119,6 +136,9 @@ function updateStepSize(handles,eventdata)
 function updatePosition(handles,eventdata)
     String = sprintf('New Position: [%d,%d,%d]',eventdata.NewData(1),eventdata.NewData(2),eventdata.NewData(3));
     updateStatus(handles,String);
+
+function tf = isViewerHandleValid(handles,fieldName)
+    tf = isfield(handles,fieldName) && ishandle(handles.(fieldName));
     
 function [hObject,handles] = InitEvents(hObject,handles)
 
@@ -132,11 +152,17 @@ function figure1_CloseRequestFcn(hObject, eventdata, handles)
 % hObject    handle to figure1 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-delete(handles.listeners.counts);
-delete(handles.listeners.step);
-delete(handles.listeners.position);
+deleteListenerIfValid(handles,'counts');
+deleteListenerIfValid(handles,'step');
+deleteListenerIfValid(handles,'position');
     
 % Hint: delete(hObject) closes the figure
 delete(hObject);
 
-
+function deleteListenerIfValid(handles,fieldName)
+    try
+        if isfield(handles,'listeners') && isfield(handles.listeners,fieldName) && isvalid(handles.listeners.(fieldName))
+            delete(handles.listeners.(fieldName));
+        end
+    catch
+    end
