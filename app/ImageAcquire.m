@@ -849,7 +849,10 @@ function toggletoolCursorSet_OffCallback(hObject, eventdata, handles)
 set(handles.imageAxes,'ButtonDownFcn','');
 % also need to set the image as well
 C = get(handles.imageAxes,'Children');
-if C
+if ~isempty(C)
+    C = C(ishandle(C));
+end
+if ~isempty(C)
     set(C,'ButtonDownFcn','');
 end
 
@@ -863,7 +866,12 @@ function toggletoolCursorSet_OnCallback(hObject, eventdata, handles)
 set(handles.imageAxes,'ButtonDownFcn',@(src,evt)SetCursorFromAxes(src,evt,handles));
 % also need to set the image as well
 C = get(handles.imageAxes,'Children');
-set(C,'ButtonDownFcn',@(src,evt)SetCursorFromAxes(src,evt,handles));
+if ~isempty(C)
+    C = C(ishandle(C));
+end
+if ~isempty(C)
+    set(C,'ButtonDownFcn',@(src,evt)SetCursorFromAxes(src,evt,handles));
+end
 
 
 
