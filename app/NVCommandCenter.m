@@ -406,8 +406,7 @@ switch Mode
         % Pre-create plot handles for incremental (inds) update (set-mode)
         x = handles.TimeVector;
         yInit = NaN(length(x), myCounter.NCounterGates);
-        axes(handles.axesAvgData);
-        handles.hAvgLines = plot(x, yInit, '.-');
+        handles.hAvgLines = plot(x, yInit, '.-','Parent',handles.axesAvgData);
         handles.axesAvgData2.Visible = 'on';
         handles.axesAvgData2.XAxisLocation = 'top';
         handles.axesAvgData2.XDir = 'reverse';
@@ -422,8 +421,7 @@ switch Mode
             xProc = handles.TimeVector;
         end
         yProcInit = NaN(length(xProc), myCounter.NCounterGates);
-        axes(handles.axesProcessData);
-        handles.hProcLines = plot(xProc, yProcInit, '.-');
+        handles.hProcLines = plot(xProc, yProcInit, '.-','Parent',handles.axesProcessData);
         set(handles.hProcLines, 'Color', [0, 0.447, 0.741]); % 深蓝
 
         handles.axesProcessData2.Visible = 'on';
@@ -548,10 +546,10 @@ switch Mode
         handles.DataProcessor = DataProcessor(myCounter);
 
         % -------- 2.1) 预创建 f-sweep 的曲线句柄（set-mode：只更新 inds 点）--------
-        axes(handles.axesAvgData);      cla(handles.axesAvgData);
-        axes(handles.axesAvgData2);     cla(handles.axesAvgData2);
-        axes(handles.axesProcessData);  cla(handles.axesProcessData);
-        axes(handles.axesProcessData2); cla(handles.axesProcessData2);
+        cla(handles.axesAvgData);
+        cla(handles.axesAvgData2);
+        cla(handles.axesProcessData);
+        cla(handles.axesProcessData2);
 
         nG = myCounter.NCounterGates;
 
@@ -561,12 +559,10 @@ switch Mode
             x1 = handles.specialVec(1:handles.TEProteusInst.SweepPoints1);
             yInit = NaN(numel(x1), nG);
 
-            axes(handles.axesAvgData);
-            handles.hAvgLinesFS1 = plot(x1, yInit, '.-');
+            handles.hAvgLinesFS1 = plot(x1, yInit, '.-','Parent',handles.axesAvgData);
             handles.hAvgLinesFS2 = [];
 
-            axes(handles.axesProcessData);
-            handles.hProcLinesFS1 = plot(x1, yInit, '.-');
+            handles.hProcLinesFS1 = plot(x1, yInit, '.-','Parent',handles.axesProcessData);
             set(handles.hProcLinesFS1, 'Color', [0, 0.447, 0.741]); % 深蓝
 
             handles.hProcLinesFS2 = [];
@@ -581,15 +577,13 @@ switch Mode
             handles.axesAvgData2.XAxisLocation = 'top';
             handles.axesAvgData2.XDir = 'reverse';
             handles.axesAvgData2.YAxisLocation = 'right';
-            axes(handles.axesAvgData2);
-            handles.hAvgLinesFS2 = plot(x2, yInit, '.-');
+            handles.hAvgLinesFS2 = plot(x2, yInit, '.-','Parent',handles.axesAvgData2);
             handles.hAvgLinesFS1 = [];
 
             handles.axesProcessData2.XAxisLocation = 'top';
             handles.axesProcessData2.XDir = 'reverse';
             handles.axesProcessData2.YAxisLocation = 'right';
-            axes(handles.axesProcessData2);
-            handles.hProcLinesFS2 = plot(x2, yInit, '.-');
+            handles.hProcLinesFS2 = plot(x2, yInit, '.-','Parent',handles.axesProcessData2);
             handles.hProcLinesFS1 = [];
 
         else
@@ -600,13 +594,11 @@ switch Mode
             yInit1 = NaN(numel(x1), nG);
             yInit2 = NaN(numel(x2), nG);
 
-            axes(handles.axesAvgData);
-            handles.hAvgLinesFS1 = plot(x1, yInit1, '.-');
+            handles.hAvgLinesFS1 = plot(x1, yInit1, '.-','Parent',handles.axesAvgData);
             set(handles.hAvgLinesFS1(1), 'Color', [0, 0.447, 0.741]); % 深蓝
             set(handles.hAvgLinesFS1(2), 'Color', [0.301, 0.745, 0.933]); % 浅蓝
 
-            axes(handles.axesAvgData2);
-            handles.hAvgLinesFS2 = plot(x2, yInit2, '.-');
+            handles.hAvgLinesFS2 = plot(x2, yInit2, '.-','Parent',handles.axesAvgData2);
             set(handles.hAvgLinesFS2(1), 'Color', [0.85, 0.325, 0.098]); % 深红
             set(handles.hAvgLinesFS2(2), 'Color', [0.929, 0.694, 0.125]); % 橙黄
 
@@ -618,13 +610,11 @@ switch Mode
             handles.axesAvgData2.XLim = [min(x2) max(x2)];
 
             %then prepare the process data lines, which only has 1 data for each point
-            axes(handles.axesProcessData);
             handles.axesProcessData.Box = 'off';
-            handles.hProcLinesFS1 = plot(x1, yInit1(:,1), '.-');
+            handles.hProcLinesFS1 = plot(x1, yInit1(:,1), '.-','Parent',handles.axesProcessData);
             set(handles.hProcLinesFS1, 'Color', [0, 0.447, 0.741]); % 深蓝
 
-            axes(handles.axesProcessData2);
-            handles.hProcLinesFS2 = plot(x2, yInit2(:,1), '.-');
+            handles.hProcLinesFS2 = plot(x2, yInit2(:,1), '.-','Parent',handles.axesProcessData2);
             set(handles.hProcLinesFS2, 'Color', [0.85, 0.325, 0.098]); % 深红
             handles.axesProcessData2.XAxisLocation = 'top';
             handles.axesProcessData2.XDir = 'reverse';
@@ -816,8 +806,7 @@ switch Mode
         % Pre-create plot handles for incremental (inds) update (set-mode)
         x = handles.TimeVector;
         yInit = NaN(length(x), myCounter.NCounterGates);
-        axes(handles.axesAvgData);
-        handles.hAvgLines = plot(x, yInit, '.-');
+        handles.hAvgLines = plot(x, yInit, '.-','Parent',handles.axesAvgData);
         handles.axesAvgData2.Visible = 'on';
         handles.axesAvgData2.XAxisLocation = 'top';
         handles.axesAvgData2.XDir = 'reverse';
@@ -832,8 +821,7 @@ switch Mode
             xProc = handles.TimeVector;
         end
         yProcInit = NaN(length(xProc), myCounter.NCounterGates);
-        axes(handles.axesProcessData);
-        handles.hProcLines = plot(xProc, yProcInit, '.-');
+        handles.hProcLines = plot(xProc, yProcInit, '.-','Parent',handles.axesProcessData);
         set(handles.hProcLines, 'Color', [0, 0.447, 0.741]); % 深蓝
 
         handles.axesProcessData2.Visible = 'on';
@@ -3326,17 +3314,17 @@ switch mode
     case 'ESR'
         initialfn = fn;
         if rawFlag ==1
-            figure;
+            fig = figure('Visible','off');
             plot(x,handles.Counter.AveragedData);
             xlabel('f (Hz)');
             ylabel('Signal');
             title(fn);
             fn = [initialfn,'-raw'];
-            saveas(gcf,fullfile(fp,fn),'jpg')
-            close
+            saveas(fig,fullfile(fp,fn),'jpg')
+            close(fig)
         end
         if processedFlag == 1
-            figure;
+            fig = figure('Visible','off');
             plot (fitresult,x,yprocess,'b-');
             fn = [initialfn,'-fitted'];
             xlabel('f (Hz)');
@@ -3348,27 +3336,27 @@ switch mode
                 strcat('f2 = ',num2str(fitresult.c1./1e6,'%.1f'),' MHz' ),...
                 strcat('fc = ',num2str(ESRfre./1e6,'%.1f'),' MHz' ),...
                 strcat('contrast = ',num2str(ESRcontrast*100,'%2.2f%%')),...
-                };
+            };
             dim = [0.4,0.7,0.2,0.2];
             annotation('textbox',dim,'String',ESRstring,'FitBoxToText','on');
-            saveas(gcf,fullfile(fp,fn),'jpg')
-            close
+            saveas(fig,fullfile(fp,fn),'jpg')
+            close(fig)
         end
 
     case 'Rabi'
         initialfn = fn;
         if rawFlag ==1
-            figure;
+            fig = figure('Visible','off');
             plot(x,handles.Counter.AveragedData);
             xlabel('t (Hz)');
             ylabel('Signal');
             title(fn);
             fn = [initialfn,'-raw'];
-            saveas(gcf,fullfile(fp,fn),'jpg')
-            close
+            saveas(fig,fullfile(fp,fn),'jpg')
+            close(fig)
         end
         if processedFlag == 1
-            figure;
+            fig = figure('Visible','off');
             plot (fitresult,x,yprocess,'b-.');
             fn = [initialfn,'-fitted'];
             xlabel('t (s)');
@@ -3378,11 +3366,11 @@ switch mode
             Rabipi = pi/fitresult.b1;
             Rabistring = {strcat('pi = ',num2str(Rabipi*1e9,'%.1f'),'ns'),...
                 strcat('Contrast = ',num2str(Rabicontrast*100,'%2.2f%%')),...
-                };
+            };
             dim = [0.2,0.7,0.2,0.2];
             annotation('textbox',dim,'String',Rabistring,'FitBoxToText','on');
-            saveas(gcf,fullfile(fp,fn),'jpg')
-            close
+            saveas(fig,fullfile(fp,fn),'jpg')
+            close(fig)
         end
 
     case 'T2'
