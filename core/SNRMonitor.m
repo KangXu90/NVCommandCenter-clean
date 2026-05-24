@@ -2,7 +2,6 @@ classdef SNRMonitor < handle
     properties
         hFig
         hEnable
-        hRefresh
         hRecalculate
         hMode
         hSignalMethod
@@ -21,7 +20,6 @@ classdef SNRMonitor < handle
         hSignalAxes
         SignalWindow = []
         ReferenceWindow = []
-        RefreshFcn = []
         StopFcn = []
         AutoStopTriggered = false
         TraceHistory
@@ -150,26 +148,24 @@ classdef SNRMonitor < handle
                 'Position',[85,586,58,22],'Callback',@(h,e)obj.reset());
             uicontrol(obj.hFig,'Style','pushbutton','String','Save', ...
                 'Position',[148,586,58,22],'Callback',@(h,e)obj.saveHistory());
-            obj.hRefresh = uicontrol(obj.hFig,'Style','pushbutton','String','Refresh', ...
-                'Position',[211,586,70,22],'Callback',@(h,e)obj.refreshNow());
             obj.hRecalculate = uicontrol(obj.hFig,'Style','pushbutton','String','Recalculate', ...
-                'Position',[286,586,82,22],'Callback',@(h,e)obj.recalculate());
+                'Position',[211,586,82,22],'Callback',@(h,e)obj.recalculate());
 
             uicontrol(obj.hFig,'Style','text','String','Mode', ...
-                'HorizontalAlignment','left','Position',[382,588,40,16]);
+                'HorizontalAlignment','left','Position',[310,588,40,16]);
             obj.hMode = uicontrol(obj.hFig,'Style','popupmenu', ...
                 'String',{'Auto','Rabi','ODMR','XY6/sensing','Custom'}, ...
-                'Position',[420,586,100,22]);
+                'Position',[348,586,100,22]);
 
             obj.hAvgText = uicontrol(obj.hFig,'Style','text','String','Avg: --', ...
-                'HorizontalAlignment','left','Position',[530,588,75,16]);
+                'HorizontalAlignment','left','Position',[460,588,75,16]);
             obj.hSNRText = uicontrol(obj.hFig,'Style','text','String','SNR: --', ...
-                'HorizontalAlignment','left','Position',[605,588,95,16]);
+                'HorizontalAlignment','left','Position',[535,588,95,16]);
             obj.hSignalText = uicontrol(obj.hFig,'Style','text','String','Signal: --', ...
-                'HorizontalAlignment','left','Position',[700,588,115,16], ...
+                'HorizontalAlignment','left','Position',[630,588,115,16], ...
                 'ForegroundColor',[0.85,0.325,0.098],'FontWeight','bold');
             obj.hNoiseText = uicontrol(obj.hFig,'Style','text','String','Noise: --', ...
-                'HorizontalAlignment','left','Position',[815,588,82,16]);
+                'HorizontalAlignment','left','Position',[745,588,110,16]);
 
             uicontrol(obj.hFig,'Style','text','String','Signal', ...
                 'HorizontalAlignment','left','Position',[12,554,55,16]);
@@ -475,17 +471,6 @@ classdef SNRMonitor < handle
             set(obj.hSNRText,'String',sprintf('SNR: %s',SNRMonitor.formatValue(snr)));
             set(obj.hSignalText,'String',sprintf('Signal: %s',SNRMonitor.formatValue(signal)));
             set(obj.hNoiseText,'String',sprintf('Noise: %s',SNRMonitor.formatValue(noise)));
-        end
-
-        function refreshNow(obj)
-            if isempty(obj.RefreshFcn)
-                return;
-            end
-            try
-                obj.RefreshFcn(obj);
-            catch err
-                disp(['SNR monitor refresh skipped: ',err.message]);
-            end
         end
 
         function checkTargetSNR(obj,snr,avgIndex)

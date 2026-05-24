@@ -1345,6 +1345,7 @@ while true
 
     end %Switch on Pulse/CW
 
+    handles = MergeRuntimeAnalysisHandles(hObject,handles);
     handles = recordSNRTraceHistory(handles,myCounter,Mode,k);
     guidata(hObject,handles);
     updateSNRMonitor(handles,myCounter,Mode,k);
@@ -1422,31 +1423,16 @@ catch err
     disp(['SNR monitor update skipped: ',err.message]);
 end
 
-function refreshSNRMonitorFromNV(hFigure,monitor)
+function handles = MergeRuntimeAnalysisHandles(hObject,handles)
 try
-    handles = guidata(hFigure);
-    if ~isfield(handles,'Counter') || isempty(handles.Counter)
-        return;
+    latestHandles = guidata(hObject);
+    if isfield(latestHandles,'SNRMonitor')
+        handles.SNRMonitor = latestHandles.SNRMonitor;
     end
-
-    Mode = getCurrentAcquisitionMode(handles);
-    avgIndex = handles.Counter.AvgIndex;
-    if isempty(avgIndex) || ~isfinite(avgIndex) || avgIndex < 1
-        avgIndex = numel(monitor.History.avg) + 1;
+    if isfield(latestHandles,'options') && isfield(latestHandles.options,'snrMonitorEnabled')
+        handles.options.snrMonitorEnabled = latestHandles.options.snrMonitorEnabled;
     end
-
-    syncSNRMonitorTraceHistory(handles,monitor);
-    [x,y] = buildSNRTrace(handles,handles.Counter,Mode);
-    if isempty(x) || isempty(y)
-        return;
-    end
-    if ~isempty(monitor.TraceHistory.avg) && any(monitor.TraceHistory.avg == avgIndex)
-        monitor.recalculate();
-        return;
-    end
-    monitor.update(x,y,avgIndex,handles.Counter.expType,Mode);
-catch err
-    disp(['SNR monitor refresh skipped: ',err.message]);
+catch
 end
 
 function stopNVFromTargetSNR(hFigure,snr,target,avgIndex)
@@ -1456,7 +1442,14 @@ try
         return;
     end
     abortRun(hFigure,[],handles);
-    SetStatus(handles,sprintf('Target SNR reached: %.3g >= %.3g at avg %d. Experiment stopped.',snr,target,avgIndex));
+    try
+        autosaveButton_Callback(hFigure,[],guidata(hFigure));
+        handles = guidata(hFigure);
+        SetStatus(handles,sprintf('Target SNR reached: %.3g >= %.3g at avg %d. Experiment stopped and saved.',snr,target,avgIndex));
+    catch saveErr
+        SetStatus(handles,sprintf('Target SNR reached: %.3g >= %.3g at avg %d. Experiment stopped, save failed.',snr,target,avgIndex));
+        disp(['Target SNR autosave skipped: ',saveErr.message]);
+    end
 catch err
     disp(['Target SNR stop skipped: ',err.message]);
 end
@@ -2150,7 +2143,6 @@ if ~isfield(handles,'SNRMonitor') || isempty(handles.SNRMonitor) || ~isvalid(han
 else
     handles.SNRMonitor.show();
 end
-handles.SNRMonitor.RefreshFcn = @(monitor)refreshSNRMonitorFromNV(handles.figure1,monitor);
 handles.SNRMonitor.StopFcn = @(snr,target,avgIndex)stopNVFromTargetSNR(handles.figure1,snr,target,avgIndex);
 syncSNRMonitorTraceHistory(handles,handles.SNRMonitor);
 handles.SNRMonitor.recalculate();
