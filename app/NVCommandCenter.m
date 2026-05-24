@@ -1486,10 +1486,62 @@ end
 if isempty(monitor.TraceHistory) || ~isstruct(monitor.TraceHistory) || ~isfield(monitor.TraceHistory,'avg')
     monitor.TraceHistory = InitSNRTraceHistory();
 end
+if isNewSNRTraceHistory(handles.SNRTraceHistory,monitor.TraceHistory)
+    monitor.reset();
+end
 if numel(handles.SNRTraceHistory.avg) <= numel(monitor.TraceHistory.avg)
     return;
 end
 monitor.TraceHistory = handles.SNRTraceHistory;
+
+function tf = isNewSNRTraceHistory(currentHistory,monitorHistory)
+tf = false;
+if isempty(currentHistory.avg) || isempty(monitorHistory.avg)
+    return;
+end
+currentIdx = numel(currentHistory.avg);
+monitorIdx = numel(monitorHistory.avg);
+currentX = currentHistory.x{currentIdx};
+monitorX = monitorHistory.x{monitorIdx};
+if isempty(currentX) || isempty(monitorX)
+    return;
+end
+if currentHistory.avg(currentIdx) < monitorHistory.avg(monitorIdx)
+    tf = true;
+    return;
+end
+if numel(currentX) ~= numel(monitorX)
+    tf = true;
+    return;
+end
+if ~sameSNRTraceAxis(currentX,monitorX)
+    tf = true;
+    return;
+end
+if ~sameSNRTraceLabel(currentHistory.expType,currentIdx,monitorHistory.expType,monitorIdx) || ...
+        ~sameSNRTraceLabel(currentHistory.modeName,currentIdx,monitorHistory.modeName,monitorIdx)
+    tf = true;
+end
+
+function tf = sameSNRTraceAxis(x1,x2)
+x1 = x1(:);
+x2 = x2(:);
+if numel(x1) ~= numel(x2)
+    tf = false;
+    return;
+end
+scale = max([1;abs(x1);abs(x2)]);
+tol = 1e-9 * scale;
+tf = abs(x1(1)-x2(1)) <= tol && abs(x1(end)-x2(end)) <= tol;
+
+function tf = sameSNRTraceLabel(labels1,idx1,labels2,idx2)
+tf = true;
+try
+    label1 = labels1{idx1};
+    label2 = labels2{idx2};
+    tf = strcmp(label1,label2);
+catch
+end
 
 function Mode = getCurrentAcquisitionMode(handles)
 if isfield(handles,'note') && ~isempty(handles.note)
