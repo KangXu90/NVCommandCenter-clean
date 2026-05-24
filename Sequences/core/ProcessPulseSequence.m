@@ -345,7 +345,7 @@ ind  = PSeq.getSweepIndex();
 chn  = PSeq.Sweeps(jj).Channels;
 rise = PSeq.Sweeps(jj).SweepRises;
 
-x = linspace(PSeq.Sweeps(jj).StartValue, PSeq.Sweeps(jj).StopValue, PSeq.Sweeps(jj).SweepPoints);
+x = linspace(PSeq.Sweeps(jj).StartValue, PSeq.Sweeps(jj).StopValue, PSeq.Sweeps(jj).SweepPoints)';
 TimeVector = x;
 
 % 如老序列无倍乘，补 1

@@ -5,8 +5,8 @@
 % experiment at each point, scores the ODMR trace, and saves a summary.
 
 %% User settings
-cfg.xList = 12.0:0.5:13;
-cfg.yList = 10.5:0.5:11.5;
+cfg.xList = 11.8:0.1:12.4;
+cfg.yList = 11.8:0.1:12.4;
 cfg.zList = NaN; % NaN disables Z movement and keeps the current Z position.
 
 cfg.speed.X = 0.1;
