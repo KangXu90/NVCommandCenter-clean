@@ -78,6 +78,7 @@ handles = InitDevices(handles);
 
 InitGUI(hObject,handles);
 handles = InitConfigMenu(hObject,handles);
+handles = InitAnalysisMenu(hObject,handles);
 
 % Update handles structure
 guidata(hObject, handles);
@@ -246,6 +247,7 @@ handles.specialData = [];
 handles.specialVec = [];
 handles.Bcal = 1;
 handles.TimeVector = [];
+handles.SNRTraceHistory = InitSNRTraceHistory();
 
 SetStatus(handles,'Experiment Started...');
 % remove any left over listeners
@@ -1343,6 +1345,9 @@ while true
 
     end %Switch on Pulse/CW
 
+    handles = recordSNRTraceHistory(handles,myCounter,Mode,k);
+    guidata(hObject,handles);
+    updateSNRMonitor(handles,myCounter,Mode,k);
     k = k+1;
 
 
@@ -1391,6 +1396,137 @@ else
     SetStatus(handles,'Experiment Complete.');
 end
 guidata(hObject,handles); % update handles object
+
+function updateSNRMonitor(handles,src,Mode,avgIndex)
+try
+    currentHandles = guidata(handles.figure1);
+    if isfield(currentHandles,'SNRMonitor')
+        monitor = currentHandles.SNRMonitor;
+    elseif isfield(handles,'SNRMonitor')
+        monitor = handles.SNRMonitor;
+    else
+        return;
+    end
+
+    if isempty(monitor) || ~isvalid(monitor) || ~monitor.isEnabled()
+        return;
+    end
+
+    syncSNRMonitorTraceHistory(currentHandles,monitor);
+    [x,y] = buildSNRTrace(currentHandles,src,Mode);
+    if isempty(x) || isempty(y)
+        return;
+    end
+    monitor.update(x,y,avgIndex,src.expType,Mode);
+catch err
+    disp(['SNR monitor update skipped: ',err.message]);
+end
+
+function refreshSNRMonitorFromNV(hFigure,monitor)
+try
+    handles = guidata(hFigure);
+    if ~isfield(handles,'Counter') || isempty(handles.Counter)
+        return;
+    end
+
+    Mode = getCurrentAcquisitionMode(handles);
+    avgIndex = handles.Counter.AvgIndex;
+    if isempty(avgIndex) || ~isfinite(avgIndex) || avgIndex < 1
+        avgIndex = numel(monitor.History.avg) + 1;
+    end
+
+    syncSNRMonitorTraceHistory(handles,monitor);
+    [x,y] = buildSNRTrace(handles,handles.Counter,Mode);
+    if isempty(x) || isempty(y)
+        return;
+    end
+    if ~isempty(monitor.TraceHistory.avg) && any(monitor.TraceHistory.avg == avgIndex)
+        monitor.recalculate();
+        return;
+    end
+    monitor.update(x,y,avgIndex,handles.Counter.expType,Mode);
+catch err
+    disp(['SNR monitor refresh skipped: ',err.message]);
+end
+
+function history = InitSNRTraceHistory()
+history = struct('x',{{}},'y',{{}},'avg',[], ...
+    'expType',{{}},'modeName',{{}});
+
+function handles = recordSNRTraceHistory(handles,src,Mode,avgIndex)
+if ~isfield(handles,'SNRTraceHistory') || isempty(handles.SNRTraceHistory)
+    handles.SNRTraceHistory = InitSNRTraceHistory();
+end
+
+[x,y] = buildSNRTrace(handles,src,Mode);
+if isempty(x) || isempty(y)
+    return;
+end
+
+existingIdx = find(handles.SNRTraceHistory.avg == avgIndex,1,'last');
+if isempty(existingIdx)
+    existingIdx = numel(handles.SNRTraceHistory.avg) + 1;
+end
+handles.SNRTraceHistory.x{existingIdx} = x;
+handles.SNRTraceHistory.y{existingIdx} = y;
+handles.SNRTraceHistory.avg(existingIdx,1) = avgIndex;
+handles.SNRTraceHistory.expType{existingIdx,1} = src.expType;
+handles.SNRTraceHistory.modeName{existingIdx,1} = Mode;
+
+function syncSNRMonitorTraceHistory(handles,monitor)
+if ~isfield(handles,'SNRTraceHistory') || isempty(handles.SNRTraceHistory) || ...
+        ~isstruct(handles.SNRTraceHistory) || ~isfield(handles.SNRTraceHistory,'avg')
+    return;
+end
+if isempty(monitor.TraceHistory) || ~isstruct(monitor.TraceHistory) || ~isfield(monitor.TraceHistory,'avg')
+    monitor.TraceHistory = InitSNRTraceHistory();
+end
+if numel(handles.SNRTraceHistory.avg) <= numel(monitor.TraceHistory.avg)
+    return;
+end
+monitor.TraceHistory = handles.SNRTraceHistory;
+
+function Mode = getCurrentAcquisitionMode(handles)
+if isfield(handles,'note') && ~isempty(handles.note)
+    Mode = handles.note;
+    return;
+end
+try
+    s = get(handles.popupMode,'String');
+    Mode = s{get(handles.popupMode,'Value')};
+catch
+    Mode = '';
+end
+
+function [x,y] = buildSNRTrace(handles,src,Mode)
+x = [];
+y = [];
+if isempty(src.ProcessedData)
+    return;
+end
+
+data = src.ProcessedData;
+if size(data,2) > 1
+    data = data(:,1);
+end
+y = data(:);
+validY = isfinite(y);
+if nnz(validY) < 3
+    x = [];
+    y = [];
+    return;
+end
+
+if strcmp(Mode,'Pulsed/f-sweep') && isfield(handles,'specialVec') && numel(handles.specialVec) == numel(y)
+    x = handles.specialVec(:);
+elseif strcmp(src.expType,'Rabi') && isfield(handles,'PulseSequence') && ~isempty(handles.PulseSequence.Sweeps)
+    SWP = handles.PulseSequence.Sweeps(1);
+    x = linspace(SWP.StartValue,SWP.StopValue,numel(y))';
+elseif isfield(handles,'TimeVector') && numel(handles.TimeVector) == numel(y)
+    x = handles.TimeVector(:);
+else
+    x = (1:numel(y))';
+end
 
 function updateSingleDataPlot(handles,src,eventdata)
 % set(handles.hRawDataPlot,'YData',src.RawData);
@@ -1986,6 +2122,28 @@ uimenu(handles.menuNVConfiguration,'Label','Save Configuration...','Tag','menuSa
 uimenu(handles.menuNVConfiguration,'Label','Load Configuration...','Tag','menuLoadNVConfiguration',...
     'Callback',@(hObject,eventdata)menuLoadConfig_Callback(hObject,eventdata,guidata(hObject)));
 
+function handles = InitAnalysisMenu(hObject,handles)
+existingMenu = findall(handles.figure1,'Tag','menuNVAnalysis');
+if ~isempty(existingMenu)
+    handles.menuNVAnalysis = existingMenu(1);
+    return;
+end
+handles.menuNVAnalysis = uimenu(handles.figure1,'Label','Analysis','Tag','menuNVAnalysis');
+handles.menuSNRMonitor = uimenu(handles.menuNVAnalysis,'Label','SNR Monitor','Tag','menuSNRMonitor',...
+    'Callback',@(hObject,eventdata)menuSNRMonitor_Callback(hObject,eventdata,guidata(hObject)));
+
+function menuSNRMonitor_Callback(hObject,eventdata,handles)
+if ~isfield(handles,'SNRMonitor') || isempty(handles.SNRMonitor) || ~isvalid(handles.SNRMonitor)
+    handles.SNRMonitor = SNRMonitor();
+else
+    handles.SNRMonitor.show();
+end
+handles.SNRMonitor.RefreshFcn = @(monitor)refreshSNRMonitorFromNV(handles.figure1,monitor);
+syncSNRMonitorTraceHistory(handles,handles.SNRMonitor);
+handles.SNRMonitor.recalculate();
+handles.options.snrMonitorEnabled = 1;
+guidata(hObject,handles);
+
 function menuSaveConfig_Callback(hObject,eventdata,handles)
 Config = BuildNVConfiguration(handles);
 defaultPath = GetConfigDefaultPath();
@@ -2374,6 +2532,8 @@ function handles = InitDefaults(handles)
 
 % define spin noise options as false
 handles.options.spinNoiseAvg = 0;
+handles.options.snrMonitorEnabled = 0;
+handles.SNRMonitor = [];
 handles.specialData = [];
 handles.specialVec = [];
 
