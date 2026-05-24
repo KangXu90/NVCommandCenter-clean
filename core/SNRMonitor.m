@@ -9,6 +9,8 @@ classdef SNRMonitor < handle
         hNoiseMethod
         hSmoothWindow
         hTimeWindow
+        hTargetEnable
+        hTargetSNR
         hAvgText
         hSNRText
         hSignalText
@@ -20,6 +22,8 @@ classdef SNRMonitor < handle
         SignalWindow = []
         ReferenceWindow = []
         RefreshFcn = []
+        StopFcn = []
+        AutoStopTriggered = false
         TraceHistory
         History
         FirstAvg = []
@@ -54,6 +58,7 @@ classdef SNRMonitor < handle
             obj.FirstAvg = [];
             obj.FirstNoise = [];
             obj.FirstSNR = [];
+            obj.AutoStopTriggered = false;
             if obj.isOpen()
                 cla(obj.hTraceAxes);
                 cla(obj.hSNRAxes);
@@ -88,6 +93,7 @@ classdef SNRMonitor < handle
             obj.drawTrace(x,y,metric);
             obj.drawHistory();
             obj.updateReadouts(avgIndex,metric.snr,metric.signal,metric.noise);
+            obj.checkTargetSNR(metric.snr,avgIndex);
             drawnow limitrate;
         end
 
@@ -189,6 +195,10 @@ classdef SNRMonitor < handle
                 'HorizontalAlignment','left','Position',[690,554,52,16]);
             obj.hTimeWindow = uicontrol(obj.hFig,'Style','edit','String','8', ...
                 'Position',[742,552,40,22]);
+            obj.hTargetEnable = uicontrol(obj.hFig,'Style','checkbox','String','Auto stop', ...
+                'Value',0,'Position',[790,552,72,22]);
+            obj.hTargetSNR = uicontrol(obj.hFig,'Style','edit','String','10', ...
+                'Position',[860,552,35,22]);
 
             obj.hTraceAxes = axes('Parent',obj.hFig,'Units','pixels','Position',[60,330,790,195]);
             obj.hSNRAxes = axes('Parent',obj.hFig,'Units','pixels','Position',[60,180,370,105]);
@@ -475,6 +485,23 @@ classdef SNRMonitor < handle
                 obj.RefreshFcn(obj);
             catch err
                 disp(['SNR monitor refresh skipped: ',err.message]);
+            end
+        end
+
+        function checkTargetSNR(obj,snr,avgIndex)
+            if isempty(obj.hTargetEnable) || ~ishandle(obj.hTargetEnable) || ...
+                    get(obj.hTargetEnable,'Value') == 0 || obj.AutoStopTriggered
+                return;
+            end
+            target = str2double(get(obj.hTargetSNR,'String'));
+            if isnan(target) || ~isfinite(target) || target <= 0 || ~isfinite(snr)
+                return;
+            end
+            if snr >= target
+                obj.AutoStopTriggered = true;
+                if ~isempty(obj.StopFcn)
+                    obj.StopFcn(snr,target,avgIndex);
+                end
             end
         end
 

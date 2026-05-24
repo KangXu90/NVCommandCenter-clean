@@ -487,8 +487,8 @@ switch Mode
         %default samplerate for pulse-ODMR
         if  ConfigVoltageForRange 
         sr_baseband = 1.125e9;
-        AmpGain = 40; % percent
-        voltage_below3GHz = 0.2;
+        AmpGain = 10; % percent
+        voltage_below3GHz = 0.1;
         voltage_above3GHz = 0.4;
 
         fopen(MAMP);
@@ -1449,6 +1449,18 @@ catch err
     disp(['SNR monitor refresh skipped: ',err.message]);
 end
 
+function stopNVFromTargetSNR(hFigure,snr,target,avgIndex)
+try
+    handles = guidata(hFigure);
+    if ~isfield(handles,'Counter') || isempty(handles.Counter) || handles.Counter.hasAborted
+        return;
+    end
+    abortRun(hFigure,[],handles);
+    SetStatus(handles,sprintf('Target SNR reached: %.3g >= %.3g at avg %d. Experiment stopped.',snr,target,avgIndex));
+catch err
+    disp(['Target SNR stop skipped: ',err.message]);
+end
+
 function history = InitSNRTraceHistory()
 history = struct('x',{{}},'y',{{}},'avg',[], ...
     'expType',{{}},'modeName',{{}});
@@ -2139,6 +2151,7 @@ else
     handles.SNRMonitor.show();
 end
 handles.SNRMonitor.RefreshFcn = @(monitor)refreshSNRMonitorFromNV(handles.figure1,monitor);
+handles.SNRMonitor.StopFcn = @(snr,target,avgIndex)stopNVFromTargetSNR(handles.figure1,snr,target,avgIndex);
 syncSNRMonitorTraceHistory(handles,handles.SNRMonitor);
 handles.SNRMonitor.recalculate();
 handles.options.snrMonitorEnabled = 1;
@@ -2305,9 +2318,10 @@ fields = {'Frequency','Frequency1','Frequency2','Amplitude','Amplitude1','Amplit
     'SweepStart2','SweepStop2','SweepPoints2'};
 
 function fields = TaborConfigFields()
-fields = {'Frequency','Frequency1','Frequency2','Amplitude','Amplitude1','Amplitude2',...
-    'SweepStart','SweepStop','SweepPoints','SweepStart1','SweepStop1','SweepPoints1',...
-    'SweepStart2','SweepStop2','SweepPoints2','SweepZoneState1','SweepZoneState2'};
+fields = {'Channel','Frequency1','Phase1','Apply6dB1','Frequency2','Phase2','Apply6dB2',...
+    'DACmode','NCOmode','Interpolation','SamplingRate','Amplitude',...
+    'SweepStart1','SweepStop1','SweepPoints1','SweepStart2','SweepStop2','SweepPoints2',...
+    'SweepZoneState1','SweepZoneState2','SweepChannel','RFState','QueryString'};
 
 
 function abortRun(hObject,eventdata,handles)
