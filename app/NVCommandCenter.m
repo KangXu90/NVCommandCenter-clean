@@ -124,11 +124,7 @@ function popupMode_Callback(hObject, eventdata, handles)
 
 contents = get(hObject,'String');
 val =contents{get(hObject,'Value')};
-if strcmp(val,'CW')
-    set(handles.editSequenceSamples,'Enable','off');
-elseif strcmp(val,'Pulsed')
-    set(handles.editSequenceSamples,'Enable','on');
-end
+set(handles.editSequenceSamples,'Enable','on');
 
 
 % --- Executes during object creation, after setting all properties.
