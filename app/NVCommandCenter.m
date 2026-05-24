@@ -78,6 +78,7 @@ handles = InitDevices(handles);
 
 InitGUI(hObject,handles);
 handles = InitConfigMenu(hObject,handles);
+handles = InitAnalysisMenu(hObject,handles);
 
 % Update handles structure
 guidata(hObject, handles);
@@ -246,6 +247,7 @@ handles.specialData = [];
 handles.specialVec = [];
 handles.Bcal = 1;
 handles.TimeVector = [];
+handles.SNRTraceHistory = InitSNRTraceHistory();
 
 SetStatus(handles,'Experiment Started...');
 % remove any left over listeners
@@ -485,8 +487,8 @@ switch Mode
         %default samplerate for pulse-ODMR
         if  ConfigVoltageForRange 
         sr_baseband = 1.125e9;
-        AmpGain = 40; % percent
-        voltage_below3GHz = 0.2;
+        AmpGain = 10; % percent
+        voltage_below3GHz = 0.1;
         voltage_above3GHz = 0.4;
 
         fopen(MAMP);
@@ -1343,6 +1345,10 @@ while true
 
     end %Switch on Pulse/CW
 
+    handles = MergeRuntimeAnalysisHandles(hObject,handles);
+    handles = recordSNRTraceHistory(handles,myCounter,Mode,k);
+    guidata(hObject,handles);
+    updateSNRMonitor(handles,myCounter,Mode,k);
     k = k+1;
 
 
@@ -1391,6 +1397,141 @@ else
     SetStatus(handles,'Experiment Complete.');
 end
 guidata(hObject,handles); % update handles object
+
+function updateSNRMonitor(handles,src,Mode,avgIndex)
+try
+    currentHandles = guidata(handles.figure1);
+    if isfield(currentHandles,'SNRMonitor')
+        monitor = currentHandles.SNRMonitor;
+    elseif isfield(handles,'SNRMonitor')
+        monitor = handles.SNRMonitor;
+    else
+        return;
+    end
+
+    if isempty(monitor) || ~isvalid(monitor) || ~monitor.isEnabled()
+        return;
+    end
+
+    syncSNRMonitorTraceHistory(currentHandles,monitor);
+    [x,y] = buildSNRTrace(currentHandles,src,Mode);
+    if isempty(x) || isempty(y)
+        return;
+    end
+    monitor.update(x,y,avgIndex,src.expType,Mode);
+catch err
+    disp(['SNR monitor update skipped: ',err.message]);
+end
+
+function handles = MergeRuntimeAnalysisHandles(hObject,handles)
+try
+    latestHandles = guidata(hObject);
+    if isfield(latestHandles,'SNRMonitor')
+        handles.SNRMonitor = latestHandles.SNRMonitor;
+    end
+    if isfield(latestHandles,'options') && isfield(latestHandles.options,'snrMonitorEnabled')
+        handles.options.snrMonitorEnabled = latestHandles.options.snrMonitorEnabled;
+    end
+catch
+end
+
+function stopNVFromTargetSNR(hFigure,snr,target,avgIndex)
+try
+    handles = guidata(hFigure);
+    if ~isfield(handles,'Counter') || isempty(handles.Counter) || handles.Counter.hasAborted
+        return;
+    end
+    abortRun(hFigure,[],handles);
+    try
+        autosaveButton_Callback(hFigure,[],guidata(hFigure));
+        handles = guidata(hFigure);
+        SetStatus(handles,sprintf('Target SNR reached: %.3g >= %.3g at avg %d. Experiment stopped and saved.',snr,target,avgIndex));
+    catch saveErr
+        SetStatus(handles,sprintf('Target SNR reached: %.3g >= %.3g at avg %d. Experiment stopped, save failed.',snr,target,avgIndex));
+        disp(['Target SNR autosave skipped: ',saveErr.message]);
+    end
+catch err
+    disp(['Target SNR stop skipped: ',err.message]);
+end
+
+function history = InitSNRTraceHistory()
+history = struct('x',{{}},'y',{{}},'avg',[], ...
+    'expType',{{}},'modeName',{{}});
+
+function handles = recordSNRTraceHistory(handles,src,Mode,avgIndex)
+if ~isfield(handles,'SNRTraceHistory') || isempty(handles.SNRTraceHistory)
+    handles.SNRTraceHistory = InitSNRTraceHistory();
+end
+
+[x,y] = buildSNRTrace(handles,src,Mode);
+if isempty(x) || isempty(y)
+    return;
+end
+
+existingIdx = find(handles.SNRTraceHistory.avg == avgIndex,1,'last');
+if isempty(existingIdx)
+    existingIdx = numel(handles.SNRTraceHistory.avg) + 1;
+end
+handles.SNRTraceHistory.x{existingIdx} = x;
+handles.SNRTraceHistory.y{existingIdx} = y;
+handles.SNRTraceHistory.avg(existingIdx,1) = avgIndex;
+handles.SNRTraceHistory.expType{existingIdx,1} = src.expType;
+handles.SNRTraceHistory.modeName{existingIdx,1} = Mode;
+
+function syncSNRMonitorTraceHistory(handles,monitor)
+if ~isfield(handles,'SNRTraceHistory') || isempty(handles.SNRTraceHistory) || ...
+        ~isstruct(handles.SNRTraceHistory) || ~isfield(handles.SNRTraceHistory,'avg')
+    return;
+end
+if isempty(monitor.TraceHistory) || ~isstruct(monitor.TraceHistory) || ~isfield(monitor.TraceHistory,'avg')
+    monitor.TraceHistory = InitSNRTraceHistory();
+end
+if numel(handles.SNRTraceHistory.avg) <= numel(monitor.TraceHistory.avg)
+    return;
+end
+monitor.TraceHistory = handles.SNRTraceHistory;
+
+function Mode = getCurrentAcquisitionMode(handles)
+if isfield(handles,'note') && ~isempty(handles.note)
+    Mode = handles.note;
+    return;
+end
+try
+    s = get(handles.popupMode,'String');
+    Mode = s{get(handles.popupMode,'Value')};
+catch
+    Mode = '';
+end
+
+function [x,y] = buildSNRTrace(handles,src,Mode)
+x = [];
+y = [];
+if isempty(src.ProcessedData)
+    return;
+end
+
+data = src.ProcessedData;
+if size(data,2) > 1
+    data = data(:,1);
+end
+y = data(:);
+validY = isfinite(y);
+if nnz(validY) < 3
+    x = [];
+    y = [];
+    return;
+end
+
+if strcmp(Mode,'Pulsed/f-sweep') && isfield(handles,'specialVec') && numel(handles.specialVec) == numel(y)
+    x = handles.specialVec(:);
+elseif strcmp(src.expType,'Rabi') && isfield(handles,'PulseSequence') && ~isempty(handles.PulseSequence.Sweeps)
+    SWP = handles.PulseSequence.Sweeps(1);
+    x = linspace(SWP.StartValue,SWP.StopValue,numel(y))';
+elseif isfield(handles,'TimeVector') && numel(handles.TimeVector) == numel(y)
+    x = handles.TimeVector(:);
+else
+    x = (1:numel(y))';
+end
 
 function updateSingleDataPlot(handles,src,eventdata)
 % set(handles.hRawDataPlot,'YData',src.RawData);
@@ -1986,6 +2127,28 @@ uimenu(handles.menuNVConfiguration,'Label','Save Configuration...','Tag','menuSa
 uimenu(handles.menuNVConfiguration,'Label','Load Configuration...','Tag','menuLoadNVConfiguration',...
     'Callback',@(hObject,eventdata)menuLoadConfig_Callback(hObject,eventdata,guidata(hObject)));
 
+function handles = InitAnalysisMenu(hObject,handles)
+existingMenu = findall(handles.figure1,'Tag','menuNVAnalysis');
+if ~isempty(existingMenu)
+    handles.menuNVAnalysis = existingMenu(1);
+    return;
+end
+handles.menuNVAnalysis = uimenu(handles.figure1,'Label','Analysis','Tag','menuNVAnalysis');
+handles.menuSNRMonitor = uimenu(handles.menuNVAnalysis,'Label','SNR Monitor','Tag','menuSNRMonitor',...
+    'Callback',@(hObject,eventdata)menuSNRMonitor_Callback(hObject,eventdata,guidata(hObject)));
+
+function menuSNRMonitor_Callback(hObject,eventdata,handles)
+if ~isfield(handles,'SNRMonitor') || isempty(handles.SNRMonitor) || ~isvalid(handles.SNRMonitor)
+    handles.SNRMonitor = SNRMonitor();
+else
+    handles.SNRMonitor.show();
+end
+handles.SNRMonitor.StopFcn = @(snr,target,avgIndex)stopNVFromTargetSNR(handles.figure1,snr,target,avgIndex);
+syncSNRMonitorTraceHistory(handles,handles.SNRMonitor);
+handles.SNRMonitor.recalculate();
+handles.options.snrMonitorEnabled = 1;
+guidata(hObject,handles);
+
 function menuSaveConfig_Callback(hObject,eventdata,handles)
 Config = BuildNVConfiguration(handles);
 defaultPath = GetConfigDefaultPath();
@@ -2147,9 +2310,10 @@ fields = {'Frequency','Frequency1','Frequency2','Amplitude','Amplitude1','Amplit
     'SweepStart2','SweepStop2','SweepPoints2'};
 
 function fields = TaborConfigFields()
-fields = {'Frequency','Frequency1','Frequency2','Amplitude','Amplitude1','Amplitude2',...
-    'SweepStart','SweepStop','SweepPoints','SweepStart1','SweepStop1','SweepPoints1',...
-    'SweepStart2','SweepStop2','SweepPoints2','SweepZoneState1','SweepZoneState2'};
+fields = {'Channel','Frequency1','Phase1','Apply6dB1','Frequency2','Phase2','Apply6dB2',...
+    'DACmode','NCOmode','Interpolation','SamplingRate','Amplitude',...
+    'SweepStart1','SweepStop1','SweepPoints1','SweepStart2','SweepStop2','SweepPoints2',...
+    'SweepZoneState1','SweepZoneState2','SweepChannel','RFState','QueryString'};
 
 
 function abortRun(hObject,eventdata,handles)
@@ -2374,6 +2538,8 @@ function handles = InitDefaults(handles)
 
 % define spin noise options as false
 handles.options.spinNoiseAvg = 0;
+handles.options.snrMonitorEnabled = 0;
+handles.SNRMonitor = [];
 handles.specialData = [];
 handles.specialVec = [];
 
