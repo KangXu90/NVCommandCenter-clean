@@ -3714,8 +3714,21 @@ oldAutoFilename = '';
 if isfield(handles,'AutoFilenamePart')
     oldAutoFilename = handles.AutoFilenamePart;
 end
+if isempty(oldAutoFilename)
+    try
+        userData = get(handles.filenameEdit,'UserData');
+        if ischar(userData) || isstring(userData)
+            oldAutoFilename = char(userData);
+        end
+    catch
+    end
+end
 filename = MergeAutoFilenamePart(currentFilename,oldAutoFilename,autoFilename);
 set(handles.filenameEdit,'String',filename);
+try
+    set(handles.filenameEdit,'UserData',autoFilename);
+catch
+end
 handles.AutoFilenamePart = autoFilename;
 try
     guidata(handles.figure1,handles);
@@ -3742,12 +3755,58 @@ if ~isempty(strfind(currentFilename,autoFilename))
     filename = currentFilename;
     return;
 end
+prefix = StripDetectedAutoFilenameTail(currentFilename);
+if ~strcmp(prefix,currentFilename)
+    filename = JoinFilenameParts(prefix,autoFilename);
+    return;
+end
 if strcmp(currentFilename,autoFilename)
     filename = autoFilename;
 else
-    filename = [currentFilename,'_',autoFilename];
-    filename = regexprep(filename,'_+','_');
-    filename = regexprep(filename,'_$','');
+    filename = JoinFilenameParts(currentFilename,autoFilename);
+end
+
+function filename = JoinFilenameParts(prefix,autoFilename)
+if isempty(prefix)
+    filename = autoFilename;
+else
+    filename = [prefix,'_',autoFilename];
+end
+filename = regexprep(filename,'_+','_');
+filename = regexprep(filename,'^_','');
+filename = regexprep(filename,'_$','');
+
+function prefix = StripDetectedAutoFilenameTail(filename)
+prefix = filename;
+markers = regexp(filename,'_(?:f[^_]*|pi[^_]*|sweep[^_]*)','start');
+if isempty(markers)
+    return;
+end
+for k = numel(markers):-1:1
+    candidate = filename(markers(k)+1:end);
+    if IsAutoFilenameTail(candidate)
+        beforeMarker = filename(1:markers(k)-1);
+        prevUnderscore = find(beforeMarker == '_',1,'last');
+        if isempty(prevUnderscore)
+            prefix = '';
+        else
+            prefix = beforeMarker(1:prevUnderscore-1);
+        end
+        prefix = regexprep(prefix,'_+$','');
+        return;
+    end
+end
+
+function tf = IsAutoFilenameTail(candidate)
+tf = false;
+if ~isempty(regexp(candidate,'^f.*_pts[^_]*$','once'))
+    tf = true;
+elseif ~isempty(regexp(candidate,'^f.*_sweep.*_pts[^_]*$','once'))
+    tf = true;
+elseif ~isempty(regexp(candidate,'^pi.*_sweep.*_pts[^_]*$','once'))
+    tf = true;
+elseif ~isempty(regexp(candidate,'^sweep.*_pts[^_]*$','once'))
+    tf = true;
 end
 
 function filename = BuildExperimentFilenameCore(handles)
