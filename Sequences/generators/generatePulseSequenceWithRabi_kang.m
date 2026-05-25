@@ -39,12 +39,12 @@ function[Channels] = generateChannels(pi_2,pi,N_pi,pi_2_phases, pi_phaseBlock,co
    
     delayMW_AOM = 2e-6;
     delayAOM_MW = 2e-6;
-    delayDAQ_AOM = 260e-9;
+    delayDAQ_AOM = 270e-9;
     counterGate = 500e-9;
     laserPulse = 10e-6;
 
         PulseSpacing = 0;
-pi_CL = 12e-6;
+    pi_CL = 0e-6;
     
 %     Counterzone = 0.5e-6;
     
