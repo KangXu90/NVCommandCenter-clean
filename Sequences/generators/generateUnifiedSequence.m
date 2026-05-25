@@ -45,6 +45,7 @@ end
 end
 
 function params = fillDefaults(params, sequenceType)
+hasSequenceName = isfield(params, 'sequenceName') && ~isempty(params.sequenceName);
 params = setDefault(params, 'sequenceName', sequenceType);
 params = setDefault(params, 'laserInitTime', 10e-6);
 params = setDefault(params, 'laserReadoutTime', 10e-6);
@@ -60,6 +61,10 @@ params = setDefault(params, 'piHalfPhases', [0 0]);
 params = setDefault(params, 'piPhase', 90);
 params = setDefault(params, 'xy8Blocks', 1);
 params = setDefault(params, 'frequency', []);
+
+if strcmpi(sequenceType, 'xy8') && ~hasSequenceName
+    params.sequenceName = sprintf('XY8-%s', formatBlockCount(params.xy8Blocks));
+end
 
 if ~isfield(params, 'hw')
     params.hw = struct();
@@ -93,6 +98,14 @@ end
 function s = setDefault(s, fieldName, value)
 if ~isfield(s, fieldName) || isempty(s.(fieldName))
     s.(fieldName) = value;
+end
+end
+
+function text = formatBlockCount(value)
+if isnumeric(value) && isscalar(value) && isfinite(value) && value == round(value)
+    text = sprintf('%d', value);
+else
+    text = num2str(value);
 end
 end
 
