@@ -18,6 +18,8 @@ classdef SNRMonitor < handle
         hSNRAxes
         hNoiseAxes
         hSignalAxes
+        hLayoutControls = gobjects(0)
+        ControlLayout = struct('handle',{},'row',{},'position',{})
         SignalWindow = []
         ReferenceWindow = []
         StopFcn = []
@@ -140,7 +142,8 @@ classdef SNRMonitor < handle
         function buildFigure(obj)
             obj.hFig = figure('Visible','on','Position',[80,80,900,620], ...
                 'MenuBar','none','Toolbar','figure','Name','SNR Monitor', ...
-                'NumberTitle','off','CloseRequestFcn',@(h,e)set(h,'Visible','off'));
+                'NumberTitle','off','CloseRequestFcn',@(h,e)set(h,'Visible','off'), ...
+                'Resize','on');
 
             obj.hEnable = uicontrol(obj.hFig,'Style','checkbox','String','Enable', ...
                 'Value',1,'Position',[12,586,70,22]);
@@ -154,18 +157,20 @@ classdef SNRMonitor < handle
             uicontrol(obj.hFig,'Style','text','String','Mode', ...
                 'HorizontalAlignment','left','Position',[310,588,40,16]);
             obj.hMode = uicontrol(obj.hFig,'Style','popupmenu', ...
-                'String',{'Auto','Rabi','ODMR','XY6/sensing','Custom'}, ...
-                'Position',[348,586,100,22]);
+                'String',{'Auto','Rabi','Ramsey','Hahn echo','ODMR', ...
+                'XY6/sensing','Exp decay','Sin damp','Lorentz', ...
+                'Smooth residual','Custom'}, ...
+                'Position',[348,586,125,22]);
 
             obj.hAvgText = uicontrol(obj.hFig,'Style','text','String','Avg: --', ...
-                'HorizontalAlignment','left','Position',[460,588,75,16]);
+                'HorizontalAlignment','left','Position',[485,588,75,16]);
             obj.hSNRText = uicontrol(obj.hFig,'Style','text','String','SNR: --', ...
-                'HorizontalAlignment','left','Position',[535,588,95,16]);
+                'HorizontalAlignment','left','Position',[560,588,95,16]);
             obj.hSignalText = uicontrol(obj.hFig,'Style','text','String','Signal: --', ...
-                'HorizontalAlignment','left','Position',[630,588,115,16], ...
+                'HorizontalAlignment','left','Position',[655,588,110,16], ...
                 'ForegroundColor',[0.85,0.325,0.098],'FontWeight','bold');
             obj.hNoiseText = uicontrol(obj.hFig,'Style','text','String','Noise: --', ...
-                'HorizontalAlignment','left','Position',[745,588,110,16]);
+                'HorizontalAlignment','left','Position',[765,588,105,16]);
 
             uicontrol(obj.hFig,'Style','text','String','Signal', ...
                 'HorizontalAlignment','left','Position',[12,554,55,16]);
@@ -205,7 +210,79 @@ classdef SNRMonitor < handle
             title(obj.hSNRAxes,'SNR vs average');
             title(obj.hNoiseAxes,'Noise vs average');
             title(obj.hSignalAxes,'Signal vs average');
+            obj.captureControlLayout();
+            obj.layoutFigure();
+            set(obj.hFig,'SizeChangedFcn',@(h,e)obj.layoutFigure());
             obj.updateReadouts(NaN,NaN,NaN,NaN);
+        end
+
+        function captureControlLayout(obj)
+            controls = findall(obj.hFig,'Type','uicontrol');
+            obj.hLayoutControls = controls(:);
+            obj.ControlLayout = struct('handle',{},'row',{},'position',{});
+            for idx = 1:numel(obj.hLayoutControls)
+                pos = get(obj.hLayoutControls(idx),'Position');
+                if pos(2) >= 570
+                    row = 1;
+                else
+                    row = 2;
+                end
+                obj.ControlLayout(end+1) = struct( ...
+                    'handle',obj.hLayoutControls(idx), ...
+                    'row',row, ...
+                    'position',pos);
+            end
+        end
+
+        function layoutFigure(obj)
+            if ~obj.isOpen()
+                return;
+            end
+
+            figPos = get(obj.hFig,'Position');
+            width = max(figPos(3),520);
+            height = max(figPos(4),360);
+
+            if figPos(3) ~= width || figPos(4) ~= height
+                set(obj.hFig,'Position',[figPos(1),figPos(2),width,height]);
+            end
+
+            topRowY = height - 34;
+            secondRowY = height - 68;
+            for idx = 1:numel(obj.ControlLayout)
+                if ~ishandle(obj.ControlLayout(idx).handle)
+                    continue;
+                end
+                pos = obj.ControlLayout(idx).position;
+                if obj.ControlLayout(idx).row == 1
+                    pos(2) = topRowY;
+                else
+                    pos(2) = secondRowY;
+                end
+                set(obj.ControlLayout(idx).handle,'Position',pos);
+            end
+
+            marginLeft = 60;
+            marginRight = 50;
+            marginBottom = 45;
+            gap = 45;
+            plotTop = height - 95;
+            plotWidth = max(width - marginLeft - marginRight,200);
+            plotHeight = max(plotTop - marginBottom,230);
+
+            signalHeight = max(70,round(plotHeight * 0.18));
+            smallHeight = max(85,round(plotHeight * 0.25));
+            traceHeight = max(120,plotHeight - signalHeight - smallHeight - 2 * gap);
+
+            signalY = marginBottom;
+            smallY = signalY + signalHeight + gap;
+            traceY = smallY + smallHeight + gap;
+            smallWidth = max((plotWidth - 50) / 2,120);
+
+            set(obj.hTraceAxes,'Units','pixels','Position',[marginLeft,traceY,plotWidth,traceHeight]);
+            set(obj.hSNRAxes,'Units','pixels','Position',[marginLeft,smallY,smallWidth,smallHeight]);
+            set(obj.hNoiseAxes,'Units','pixels','Position',[marginLeft + smallWidth + 50,smallY,smallWidth,smallHeight]);
+            set(obj.hSignalAxes,'Units','pixels','Position',[marginLeft,signalY,plotWidth,signalHeight]);
         end
 
         function tf = isOpen(obj)
@@ -306,6 +383,14 @@ classdef SNRMonitor < handle
             if strcmp(mode,'Auto')
                 if strcmpi(expType,'Rabi')
                     mode = 'Rabi';
+                elseif ~isempty(strfind(lower(expType),'ramsey')) || ...
+                        ~isempty(strfind(lower(modeName),'ramsey'))
+                    mode = 'Ramsey';
+                elseif ~isempty(strfind(lower(expType),'hahn')) || ...
+                        ~isempty(strfind(lower(expType),'echo')) || ...
+                        ~isempty(strfind(lower(modeName),'hahn')) || ...
+                        ~isempty(strfind(lower(modeName),'echo'))
+                    mode = 'Hahn echo';
                 elseif ~isempty(strfind(lower(modeName),'sweep'))
                     mode = 'ODMR';
                 else
@@ -313,20 +398,35 @@ classdef SNRMonitor < handle
                 end
             end
 
+            fitMode = SNRMonitor.fitModeForMonitorMode(mode);
             signalMethod = SNRMonitor.selectedPopup(obj.hSignalMethod);
             noiseMethod = SNRMonitor.selectedPopup(obj.hNoiseMethod);
             if strcmp(signalMethod,'Auto')
-                if strcmp(mode,'Rabi')
+                if strcmp(mode,'Rabi') || strcmp(mode,'Ramsey') || ...
+                        strcmp(mode,'Smooth residual')
                     signalMethod = 'Peak-valley';
                 else
                     signalMethod = 'Signal-reference';
                 end
             end
             if strcmp(noiseMethod,'Auto')
-                if strcmp(mode,'ODMR') && ~isempty(obj.ReferenceWindow)
+                if ~isempty(fitMode)
+                    noiseMethod = 'Residual';
+                elseif strcmp(mode,'ODMR') && ~isempty(obj.ReferenceWindow)
                     noiseMethod = 'Reference window';
                 else
                     noiseMethod = 'Residual';
+                end
+            end
+
+            if strcmp(noiseMethod,'Residual') && ~isempty(fitMode)
+                fitMetric = SNRMonitor.fitTraceModel(x,y,fitMode);
+                if ~isempty(fitMetric)
+                    metric.signal = fitMetric.signal;
+                    metric.fit = fitMetric.fit;
+                    metric.residual = y - metric.fit;
+                    metric.noise = SNRMonitor.rmsNoise(metric.residual);
+                    return;
                 end
             end
 
@@ -590,6 +690,143 @@ classdef SNRMonitor < handle
             noise = 1.4826 * median(abs(values - med));
             if noise <= 0
                 noise = std(values);
+            end
+        end
+
+        function noise = rmsNoise(values)
+            values = values(isfinite(values));
+            if numel(values) < 2
+                noise = NaN;
+                return;
+            end
+            noise = sqrt(mean(values(:).^2));
+        end
+
+        function fitMode = fitModeForMonitorMode(mode)
+            fitMode = '';
+            switch lower(strrep(mode,' ',''))
+                case {'rabi','sindamp'}
+                    fitMode = 'sindamp';
+                case {'hahnecho','expdecay'}
+                    fitMode = 'expdecay';
+                case {'odmr','lorentz','lorenz'}
+                    fitMode = 'lorentz';
+            end
+        end
+
+        function metric = fitTraceModel(x,y,fitMode)
+            metric = [];
+            x = x(:);
+            y = y(:);
+            valid = isfinite(x) & isfinite(y);
+            x = x(valid);
+            y = y(valid);
+            xSpan = max(x) - min(x);
+            ySpan = max(y) - min(y);
+            if numel(y) < 6 || xSpan == 0 || ySpan == 0
+                return;
+            end
+
+            xs = (x - min(x)) ./ xSpan;
+            switch fitMode
+                case 'expdecay'
+                    metric = SNRMonitor.fitExpDecay(xs,y);
+                case 'sindamp'
+                    metric = SNRMonitor.fitSinDamp(xs,y);
+                case 'lorentz'
+                    metric = SNRMonitor.fitLorentz(xs,y);
+            end
+        end
+
+        function metric = fitExpDecay(x,y)
+            tailCount = max(3,round(numel(y) * 0.2));
+            c0 = median(y(end-tailCount+1:end));
+            a0 = y(1) - c0;
+            if abs(a0) < eps
+                a0 = max(y) - min(y);
+            end
+            tau0 = 0.35;
+            p0 = [c0,a0,log(tau0)];
+            objective = @(p) sum((y - SNRMonitor.expDecayModel(p,x)).^2);
+            p = SNRMonitor.safeFminsearch(objective,p0);
+            yfit = SNRMonitor.expDecayModel(p,x);
+            metric = struct('fit',yfit,'signal',abs(p(2)));
+        end
+
+        function yfit = expDecayModel(p,x)
+            tau = max(exp(p(3)),1e-6);
+            yfit = p(1) + p(2) .* exp(-x ./ tau);
+        end
+
+        function metric = fitSinDamp(x,y)
+            c0 = mean(y);
+            a0 = 0.5 * (max(y) - min(y));
+            freq0 = SNRMonitor.estimateCycles(x,y - c0);
+            phi0 = 0;
+            tau0 = 1.2;
+            p0 = [c0,a0,log(freq0),phi0,log(tau0)];
+            objective = @(p) sum((y - SNRMonitor.sinDampModel(p,x)).^2);
+            p = SNRMonitor.safeFminsearch(objective,p0);
+            yfit = SNRMonitor.sinDampModel(p,x);
+            metric = struct('fit',yfit,'signal',abs(p(2)));
+        end
+
+        function yfit = sinDampModel(p,x)
+            cycles = min(max(exp(p(3)),0.05),30);
+            tau = max(exp(p(5)),1e-6);
+            yfit = p(1) + p(2) .* cos(2*pi*cycles*x + p(4)) .* exp(-x ./ tau);
+        end
+
+        function cycles = estimateCycles(x,y)
+            y = y(:) - mean(y(:));
+            n = numel(y);
+            if n < 8
+                cycles = 2;
+                return;
+            end
+            spectrum = abs(fft(y));
+            half = 2:floor(n/2);
+            if isempty(half)
+                cycles = 2;
+                return;
+            end
+            [~,localIdx] = max(spectrum(half));
+            bin = half(localIdx) - 1;
+            cycles = max(bin / max(max(x) - min(x),eps),0.5);
+            cycles = min(cycles,10);
+        end
+
+        function metric = fitLorentz(x,y)
+            xs = x - mean(x);
+            yMed = median(y);
+            [yMin,minIdx] = min(y);
+            [yMax,maxIdx] = max(y);
+            if abs(yMin - yMed) >= abs(yMax - yMed)
+                a0 = yMin - yMed;
+                x0 = xs(minIdx);
+            else
+                a0 = yMax - yMed;
+                x0 = xs(maxIdx);
+            end
+            gamma0 = 0.08;
+            p0 = [yMed,0,a0,x0,log(gamma0)];
+            objective = @(p) sum((y - SNRMonitor.lorentzModel(p,xs)).^2);
+            p = SNRMonitor.safeFminsearch(objective,p0);
+            yfit = SNRMonitor.lorentzModel(p,xs);
+            metric = struct('fit',yfit,'signal',abs(p(3)));
+        end
+
+        function yfit = lorentzModel(p,x)
+            gamma = max(exp(p(5)),1e-6);
+            yfit = p(1) + p(2).*x + p(3) ./ (1 + ((x - p(4)) ./ gamma).^2);
+        end
+
+        function p = safeFminsearch(objective,p0)
+            opts = optimset('Display','off','MaxIter',600,'MaxFunEvals',2500);
+            try
+                p = fminsearch(objective,p0,opts);
+            catch
+                p = p0;
             end
         end
 

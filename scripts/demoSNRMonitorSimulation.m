@@ -4,6 +4,8 @@ function dataset = demoSNRMonitorSimulation(mode, nAverages, saveDataset)
 % Usage:
 %   demoSNRMonitorSimulation
 %   demoSNRMonitorSimulation('rabi')
+%   demoSNRMonitorSimulation('ramsey')
+%   demoSNRMonitorSimulation('hahnecho')
 %   demoSNRMonitorSimulation('odmr', 50, true)
 %   data = demoSNRMonitorSimulation('all', 40, true)
 %
@@ -41,6 +43,10 @@ set(monitor.hEnable,'Value',1);
 switch mode
     case 'rabi'
         runDemo(monitor,dataset.rabi,'Rabi','Pulsed');
+    case 'ramsey'
+        runDemo(monitor,dataset.ramsey,'Ramsey','Pulsed');
+    case {'hahn','hahnecho','hahn_echo'}
+        runDemo(monitor,dataset.hahnecho,'Hahn echo','Pulsed');
     case 'odmr'
         runDemo(monitor,dataset.odmr,'','Pulsed/f-sweep');
     case {'xy6','proton','sensing'}
@@ -49,12 +55,18 @@ switch mode
         runDemo(monitor,dataset.rabi,'Rabi','Pulsed');
         pause(0.5);
         monitor.reset();
+        runDemo(monitor,dataset.ramsey,'Ramsey','Pulsed');
+        pause(0.5);
+        monitor.reset();
+        runDemo(monitor,dataset.hahnecho,'Hahn echo','Pulsed');
+        pause(0.5);
+        monitor.reset();
         runDemo(monitor,dataset.odmr,'','Pulsed/f-sweep');
         pause(0.5);
         monitor.reset();
         runDemo(monitor,dataset.xy6,'T2','Pulsed');
     otherwise
-        error('Unknown mode "%s". Use rabi, odmr, xy6, or all.',mode);
+        error('Unknown mode "%s". Use rabi, ramsey, hahnecho, odmr, xy6, or all.',mode);
 end
 end
 
@@ -74,6 +86,8 @@ end
 function dataset = buildSNRMonitorDemoDataset(nAverages)
 rng(7);
 dataset.rabi = makeRabiDataset(nAverages);
+dataset.ramsey = makeRamseyDataset(nAverages);
+dataset.hahnecho = makeHahnEchoDataset(nAverages);
 dataset.odmr = makeODMRDataset(nAverages);
 dataset.xy6 = makeXY6Dataset(nAverages);
 dataset.description = ['Synthetic cumulative-average traces for ', ...
@@ -90,7 +104,44 @@ singleNoise = 0.055;
 slowDrift = linspace(0,0.01,nAverages);
 yAvg = cumulativeAverage(clean,singleNoise,slowDrift);
 
-traceSet = baseTraceSet(x,yAvg,'Rabi','Auto','Auto');
+traceSet = baseTraceSet(x,yAvg,'Sin damp','Auto','Residual');
+traceSet.signalWindow = [];
+traceSet.referenceWindow = [];
+traceSet.clean = clean;
+end
+
+function traceSet = makeRamseyDataset(nAverages)
+nPts = 120;
+x = linspace(0,8e-6,nPts)';
+envelope = exp(-(x/4.8e-6).^1.4);
+clean = 0.98 + envelope .* ( ...
+    0.055*cos(2*pi*0.78e6*x + 0.2) + ...
+    0.032*cos(2*pi*1.16e6*x + 1.1) + ...
+    0.018*cos(2*pi*1.55e6*x - 0.4));
+clean = clean + 0.004*(x - mean(x))/span(x);
+singleNoise = 0.038;
+slowDrift = 0.008*cumsum(randn(1,nAverages))/sqrt(nAverages);
+yAvg = cumulativeAverage(clean,singleNoise,slowDrift);
+
+traceSet = baseTraceSet(x,yAvg,'Ramsey','Auto','Residual');
+traceSet.signalWindow = [];
+traceSet.referenceWindow = [];
+traceSet.clean = clean;
+end
+
+function traceSet = makeHahnEchoDataset(nAverages)
+nPts = 90;
+x = linspace(0,12e-6,nPts)';
+baseline = 0.975;
+contrast = 0.18;
+t2 = 4.2e-6;
+clean = baseline + contrast*exp(-x/t2);
+clean = clean + 0.006*(x - mean(x))/span(x);
+singleNoise = 0.04;
+slowDrift = 0.006*cumsum(randn(1,nAverages))/sqrt(nAverages);
+yAvg = cumulativeAverage(clean,singleNoise,slowDrift);
+
+traceSet = baseTraceSet(x,yAvg,'Exp decay','Auto','Residual');
 traceSet.signalWindow = [];
 traceSet.referenceWindow = [];
 traceSet.clean = clean;
@@ -101,14 +152,14 @@ nPts = 101;
 x = linspace(2.81e9,2.93e9,nPts)';
 center = 2.872e9;
 linewidth = 8.5e6;
-baseline = 1 + 0.012*(x - mean(x))/range(x);
+baseline = 1 + 0.012*(x - mean(x))/span(x);
 dip = 0.14 ./ (1 + ((x-center)/linewidth).^2);
 clean = baseline - dip;
 singleNoise = 0.045;
 slowDrift = 0.006*sin(linspace(0,1.4*pi,nAverages));
 yAvg = cumulativeAverage(clean,singleNoise,slowDrift);
 
-traceSet = baseTraceSet(x,yAvg,'ODMR','Signal-reference','Reference window');
+traceSet = baseTraceSet(x,yAvg,'Lorentz','Auto','Residual');
 traceSet.signalWindow = [47,55];
 traceSet.referenceWindow = [4,22];
 traceSet.clean = clean;
@@ -171,4 +222,8 @@ idx = find(strcmp(strings,value),1);
 if ~isempty(idx)
     set(hPopup,'Value',idx);
 end
+end
+
+function v = span(x)
+v = max(x) - min(x);
 end
