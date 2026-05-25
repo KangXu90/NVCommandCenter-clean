@@ -10,6 +10,7 @@ function [PSeq, params] = generateUnifiedSequence(sequenceType, params, savePath
 %   params.frequency = 828e6; params.sweep.target = 'proton';
 %   % One-line command to copy/paste; omitting savePath opens the save dialog:
 %   generateUnifiedSequence('XY8', struct('frequency',828e6,'piTime',50e-9,'piHalfTime',25e-9,'xy8Blocks',8,'sweep',struct('target','proton')));
+%   generateUnifiedSequence('WAHUHA', struct('dsl4Pulses',16));
 %
 % This file is intentionally independent from the older generatePulseSequence_*
 % scripts.  It is meant as a cleaner template that keeps common timing,
@@ -60,10 +61,21 @@ params = setDefault(params, 'pulseSpacing', 0);
 params = setDefault(params, 'piHalfPhases', [0 0]);
 params = setDefault(params, 'piPhase', 90);
 params = setDefault(params, 'xy8Blocks', 1);
+params = setDefault(params, 'dsl4Pulses', 4);
+params = setDefault(params, 'wahuhaPiHalfPhases', [90 90]);
+params = setDefault(params, 'wahuhaPhaseBlock', [180 270 90 0 180 90 270 0 0 90 270 180 0 270 90 180]);
+params = setDefault(params, 'wahuhaGapMultBlock', [1 2 1 2 1 2 1 2 1 2 1 2 1 2 1 2]);
+params = setDefault(params, 'wahuhaPulseSpacingUnit', 50e-9);
 params = setDefault(params, 'frequency', []);
 
 if strcmpi(sequenceType, 'xy8') && ~hasSequenceName
     params.sequenceName = sprintf('XY8-%s', formatBlockCount(params.xy8Blocks));
+end
+if strcmpi(sequenceType, 'wahuha')
+    params.dsl4GeneratedPulses = roundUpToMultiple(params.dsl4Pulses, 4);
+    if ~hasSequenceName
+        params.sequenceName = sprintf('WAHUHA-%s', formatBlockCount(params.dsl4Pulses));
+    end
 end
 
 if ~isfield(params, 'hw')
@@ -107,6 +119,13 @@ if isnumeric(value) && isscalar(value) && isfinite(value) && value == round(valu
 else
     text = num2str(value);
 end
+end
+
+function value = roundUpToMultiple(value, multiple)
+if ~isnumeric(value) || ~isscalar(value) || ~isfinite(value) || value <= 0 || value ~= round(value)
+    error('dsl4Pulses must be a positive integer scalar.');
+end
+value = ceil(value/multiple)*multiple;
 end
 
 function params = applyLarmorSweepDefaults(params, sequenceType)
@@ -186,6 +205,27 @@ multipliers = 2*ones(1, numPiPulses + 2);
 multipliers([1 2 end]) = 1;
 end
 
+function values = repeatBlock(block, count)
+if isempty(block)
+    error('WAHUHA phase and gap blocks must not be empty.');
+end
+values = zeros(1, count);
+for k = 1:count
+    values(k) = block(mod(k - 1, numel(block)) + 1);
+end
+end
+
+function t = addWahuhaTrain(channel, t, phases, gapMultipliers, p, finalPhase)
+addPulse(channel, t, p.piHalfTime, 'pi2', p.mwAmplitude, p.wahuhaPiHalfPhases(1), 1);
+t = t + p.wahuhaPulseSpacingUnit;
+for k = 1:numel(phases)
+    addPulse(channel, t, p.piHalfTime, 'sweep', p.mwAmplitude, phases(k), gapMultipliers(k));
+    t = t + p.wahuhaPulseSpacingUnit*gapMultipliers(k);
+end
+addPulse(channel, t, p.piHalfTime, 'sweep', p.mwAmplitude, finalPhase, 1);
+t = t + p.piHalfTime;
+end
+
 function [Channels, sweepSpec] = buildSequence(sequenceType, p)
 Channels = makeChannels(p.hw);
 
@@ -200,6 +240,9 @@ xy8SecondReadout = false;
 xy8MarkerTrain = false;
 xy8Phases = [];
 xy8SweepMultipliers = [];
+wahuhaSecondReadout = false;
+wahuhaPhases = [];
+wahuhaGapMultipliers = [];
 
 addPulse(Channels(laserCh), 0, p.laserInitTime, 'Init', 1, 0);
 addPulse(Channels(counterCh), p.readoutDelay, p.counterWidth, 'Counter', 1, 0);
@@ -251,6 +294,19 @@ switch lower(sequenceType)
         t = t + p.piHalfTime;
         xy8SecondReadout = true;
         xy8MarkerTrain = true;
+
+    case 'wahuha'
+        wahuhaPhases = repeatBlock(p.wahuhaPhaseBlock, p.dsl4GeneratedPulses);
+        wahuhaGapMultipliers = repeatBlock(p.wahuhaGapMultBlock, p.dsl4GeneratedPulses);
+        t = addWahuhaTrain(Channels(mwCh), t, wahuhaPhases, wahuhaGapMultipliers, p, p.wahuhaPiHalfPhases(2));
+        sweepSpec.type = 'Frequency';
+        sweepSpec.rise = 'sweep';
+        sweepSpec.start = 2e6;
+        sweepSpec.stop = 2e6;
+        sweepSpec.points = 1;
+        sweepSpec.shifts = 0;
+        sweepSpec.add = 0;
+        wahuhaSecondReadout = true;
 
     case 't1'
         readoutTime = t;
@@ -320,6 +376,16 @@ if xy8MarkerTrain
     end
     addPulse(Channels(markerCh), t, p.piHalfTime, 'sweep', 1, p.piHalfPhases(2), xy8SweepMultipliers(end));
     t = t + p.piHalfTime;
+end
+
+if wahuhaSecondReadout
+    t = t + p.delayLaserToMW;
+    t = addWahuhaTrain(Channels(mwCh), t, wahuhaPhases, wahuhaGapMultipliers, p, p.wahuhaPiHalfPhases(2) + 180);
+
+    readoutTime = t + p.delayMWToReadout;
+    addPulse(Channels(laserCh), readoutTime, p.laserReadoutTime, 'Readout', 1, 0);
+    addPulse(Channels(counterCh), readoutTime + p.readoutDelay, p.counterWidth, 'Counter', 1, 0);
+    t = readoutTime + p.laserReadoutTime;
 end
 
 if hahnMarkerTrain
