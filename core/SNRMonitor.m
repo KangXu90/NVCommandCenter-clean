@@ -157,9 +157,8 @@ classdef SNRMonitor < handle
             uicontrol(obj.hFig,'Style','text','String','Mode', ...
                 'HorizontalAlignment','left','Position',[310,588,40,16]);
             obj.hMode = uicontrol(obj.hFig,'Style','popupmenu', ...
-                'String',{'Auto','Rabi','Ramsey','Hahn echo','ODMR', ...
-                'XY6/sensing','Exp decay','Sin damp','Lorentz', ...
-                'Smooth residual','Custom'}, ...
+                'String',{'Smooth residual','ODMR','Exp decay','Sin damp','Lorentz','Custom'}, ...
+                'Value',1, ...
                 'Position',[348,586,125,22]);
 
             obj.hAvgText = uicontrol(obj.hFig,'Style','text','String','Avg: --', ...
@@ -167,8 +166,7 @@ classdef SNRMonitor < handle
             obj.hSNRText = uicontrol(obj.hFig,'Style','text','String','SNR: --', ...
                 'HorizontalAlignment','left','Position',[560,588,95,16]);
             obj.hSignalText = uicontrol(obj.hFig,'Style','text','String','Signal: --', ...
-                'HorizontalAlignment','left','Position',[655,588,110,16], ...
-                'ForegroundColor',[0.85,0.325,0.098],'FontWeight','bold');
+                'HorizontalAlignment','left','Position',[655,588,110,16]);
             obj.hNoiseText = uicontrol(obj.hFig,'Style','text','String','Noise: --', ...
                 'HorizontalAlignment','left','Position',[765,588,105,16]);
 
@@ -380,30 +378,11 @@ classdef SNRMonitor < handle
                 'signalWindow',obj.SignalWindow,'referenceWindow',obj.ReferenceWindow);
 
             mode = SNRMonitor.selectedPopup(obj.hMode);
-            if strcmp(mode,'Auto')
-                if strcmpi(expType,'Rabi')
-                    mode = 'Rabi';
-                elseif ~isempty(strfind(lower(expType),'ramsey')) || ...
-                        ~isempty(strfind(lower(modeName),'ramsey'))
-                    mode = 'Ramsey';
-                elseif ~isempty(strfind(lower(expType),'hahn')) || ...
-                        ~isempty(strfind(lower(expType),'echo')) || ...
-                        ~isempty(strfind(lower(modeName),'hahn')) || ...
-                        ~isempty(strfind(lower(modeName),'echo'))
-                    mode = 'Hahn echo';
-                elseif ~isempty(strfind(lower(modeName),'sweep'))
-                    mode = 'ODMR';
-                else
-                    mode = 'Custom';
-                end
-            end
-
             fitMode = SNRMonitor.fitModeForMonitorMode(mode);
             signalMethod = SNRMonitor.selectedPopup(obj.hSignalMethod);
             noiseMethod = SNRMonitor.selectedPopup(obj.hNoiseMethod);
             if strcmp(signalMethod,'Auto')
-                if strcmp(mode,'Rabi') || strcmp(mode,'Ramsey') || ...
-                        strcmp(mode,'Smooth residual')
+                if strcmp(mode,'Smooth residual')
                     signalMethod = 'Peak-valley';
                 else
                     signalMethod = 'Signal-reference';
@@ -503,7 +482,6 @@ classdef SNRMonitor < handle
             if ~isempty(metric.fit)
                 plot(obj.hTraceAxes,x,metric.fit,'-','Color',[0.15,0.15,0.15]);
             end
-            obj.drawWindow(obj.hTraceAxes,x,y,obj.SignalWindow,[0.85,0.325,0.098]);
             obj.drawWindow(obj.hTraceAxes,x,y,obj.ReferenceWindow,[0.466,0.674,0.188]);
             hold(obj.hTraceAxes,'off');
             title(obj.hTraceAxes,'Current trace');
@@ -558,7 +536,7 @@ classdef SNRMonitor < handle
             hold(obj.hNoiseAxes,'off');
             xlabel(obj.hNoiseAxes,'Average');
             ylabel(obj.hNoiseAxes,'Noise');
-            legend(obj.hNoiseAxes,{'Actual','1/sqrt(N) ref'},'Location','northwest');
+            legend(obj.hNoiseAxes,{'Actual','1/sqrt(N) ref'},'Location','northeast');
 
             cla(obj.hSignalAxes);
             plot(obj.hSignalAxes,avg,obj.History.signal,'.-','Color',[0.466,0.674,0.188]);

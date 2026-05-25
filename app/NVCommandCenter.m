@@ -287,6 +287,7 @@ myCounter.AvgIndex = 0;
 myCounter.RawData = [];
 myCounter.ProcessedData = [];
 myCounter.AveragedData = [];
+handles.CurrentAverage = 0;
 % myCounter.init();
 
 
@@ -1342,6 +1343,7 @@ while true
     end %Switch on Pulse/CW
 
     handles = MergeRuntimeAnalysisHandles(hObject,handles);
+    handles.CurrentAverage = k;
     handles = recordSNRTraceHistory(handles,myCounter,Mode,k);
     guidata(hObject,handles);
     updateSNRMonitor(handles,myCounter,Mode,k);
@@ -3857,7 +3859,7 @@ if isempty(name)
 end
 name = regexprep(name,'_samp[^_]*_avg[^_]*$','');
 samples = SanitizeFilenamePart(get(handles.editSequenceSamples,'String'));
-averages = SanitizeFilenamePart(get(handles.editAverages,'String'));
+averages = SanitizeFilenamePart(GetFilenameAverage(handles));
 if isempty(samples)
     samples = 'Unknown';
 end
@@ -3869,6 +3871,25 @@ if isempty(ext)
     ext = '.mat';
 end
 filename = [filename,ext];
+
+function averages = GetFilenameAverage(handles)
+averages = '';
+if isfield(handles,'CurrentAverage') && isnumeric(handles.CurrentAverage) && ...
+        isscalar(handles.CurrentAverage) && isfinite(handles.CurrentAverage) && ...
+        handles.CurrentAverage > 0
+    averages = sprintf('%d',floor(handles.CurrentAverage));
+    return;
+end
+try
+    if isfield(handles,'Counter') && ~isempty(handles.Counter) && ...
+            isnumeric(handles.Counter.AvgIndex) && isscalar(handles.Counter.AvgIndex) && ...
+            isfinite(handles.Counter.AvgIndex) && handles.Counter.AvgIndex > 0
+        averages = sprintf('%d',floor(handles.Counter.AvgIndex));
+        return;
+    end
+catch
+end
+averages = get(handles.editAverages,'String');
 
 function filename = BuildUniqueFilename(filename,relatedExtensions)
 if nargin < 2
@@ -3948,6 +3969,18 @@ else
 end
 
 function part = BuildPiName(handles)
+pulseLabel = '';
+pulseValue = [];
+[pulseLabel,pulseValue] = GetPulseNameFromSequence(handles);
+if ~isempty(pulseLabel)
+    if isempty(pulseValue) || isnan(pulseValue)
+        part = pulseLabel;
+    else
+        part = [pulseLabel,FormatSweepValue(pulseValue)];
+    end
+    return;
+end
+
 piValue = [];
 if isfield(handles,'textPiPulse') && ishandle(handles.textPiPulse)
     piText = get(handles.textPiPulse,'String');
@@ -3961,6 +3994,130 @@ if isempty(piValue) || isnan(piValue)
 else
     part = ['pi',FormatSweepValue(piValue)];
 end
+
+function [pulseLabel,pulseValue] = GetPulseNameFromSequence(handles)
+pulseLabel = '';
+pulseValue = [];
+if ~isfield(handles,'PulseSequence') || isempty(handles.PulseSequence) || ...
+        ~isprop(handles.PulseSequence,'Channels') || isempty(handles.PulseSequence.Channels)
+    return;
+end
+
+pseq = handles.PulseSequence;
+mwHWChannel = [];
+try
+    if isprop(pseq,'MWHWChannel') && ~isempty(pseq.MWHWChannel)
+        mwHWChannel = pseq.MWHWChannel;
+    end
+catch
+end
+if isempty(mwHWChannel)
+    mwHWChannel = GetDefaultMWHWChannel(pseq);
+end
+
+piDurations = [];
+piHalfDurations = [];
+mwDurations = [];
+for channelIndex = 1:numel(pseq.Channels)
+    ch = pseq.Channels(channelIndex);
+    if ~isempty(mwHWChannel)
+        try
+            if ~isprop(ch,'HWChannel') || isempty(ch.HWChannel) || ch.HWChannel ~= mwHWChannel
+                continue;
+            end
+        catch
+            continue;
+        end
+    end
+    if ~isprop(ch,'RiseDurations') || isempty(ch.RiseDurations)
+        continue;
+    end
+    for riseIndex = 1:numel(ch.RiseDurations)
+        duration = ToDouble(ch.RiseDurations(riseIndex));
+        if isnan(duration) || duration <= 0
+            continue;
+        end
+        riseType = GetRiseType(ch,riseIndex);
+        if isempty(mwHWChannel) && IsNonMicrowaveRiseType(riseType)
+            continue;
+        end
+        if IsPiHalfRiseType(riseType)
+            piHalfDurations(end+1) = duration; %#ok<AGROW>
+        elseif IsPiRiseType(riseType)
+            piDurations(end+1) = duration; %#ok<AGROW>
+        end
+        mwDurations(end+1) = duration; %#ok<AGROW>
+    end
+end
+
+if ~isempty(piDurations)
+    pulseLabel = 'pi';
+    pulseValue = max(piDurations);
+elseif ~isempty(piHalfDurations)
+    durationValues = UniqueRoundedValues(mwDurations);
+    if numel(durationValues) > 1
+        pulseLabel = 'pi';
+        pulseValue = max(durationValues);
+    else
+        pulseLabel = 'piOver2';
+        pulseValue = max(piHalfDurations);
+    end
+elseif ~isempty(mwDurations)
+    durationValues = UniqueRoundedValues(mwDurations);
+    if numel(durationValues) > 1
+        pulseLabel = 'pi';
+        pulseValue = max(durationValues);
+    else
+        pulseLabel = 'piOver2';
+        pulseValue = durationValues(1);
+    end
+end
+
+function riseType = GetRiseType(channel,riseIndex)
+riseType = '';
+try
+    if isprop(channel,'RiseTypes') && numel(channel.RiseTypes) >= riseIndex
+        riseType = lower(char(channel.RiseTypes{riseIndex}));
+    end
+catch
+end
+
+function mwHWChannel = GetDefaultMWHWChannel(pseq)
+mwHWChannel = [];
+try
+    for channelIndex = 1:numel(pseq.Channels)
+        ch = pseq.Channels(channelIndex);
+        if isprop(ch,'HWChannel') && ~isempty(ch.HWChannel) && ch.HWChannel == 3
+            mwHWChannel = 3;
+            return;
+        end
+    end
+catch
+end
+
+function tf = IsPiHalfRiseType(riseType)
+tf = ~isempty(regexp(riseType,'pi\s*/?\s*2|pi[_-]?half|half[_-]?pi','once'));
+
+function tf = IsPiRiseType(riseType)
+tf = ~IsPiHalfRiseType(riseType) && ...
+    ~isempty(regexp(riseType,'(^|[^a-z0-9])pi([^a-z0-9]|$)','once'));
+
+function tf = IsNonMicrowaveRiseType(riseType)
+tf = ~isempty(strfind(riseType,'counter')) || ...
+    ~isempty(strfind(riseType,'init')) || ...
+    ~isempty(strfind(riseType,'readout')) || ...
+    ~isempty(strfind(riseType,'laser')) || ...
+    strcmp(riseType,'rise') || ...
+    ~isempty(strfind(riseType,'end'));
+
+function values = UniqueRoundedValues(values)
+values = values(isfinite(values) & values > 0);
+if isempty(values)
+    return;
+end
+scale = 1e12;
+roundedValues = round(values * scale) / scale;
+values = unique(roundedValues);
 
 function out = FormatFrequency(value)
 value = ToDouble(value);
