@@ -47,6 +47,7 @@ end
 
 function params = fillDefaults(params, sequenceType)
 hasSequenceName = isfield(params, 'sequenceName') && ~isempty(params.sequenceName);
+hasPulseSpacing = isfield(params, 'pulseSpacing') && ~isempty(params.pulseSpacing);
 params = setDefault(params, 'sequenceName', sequenceType);
 params = setDefault(params, 'laserInitTime', 10e-6);
 params = setDefault(params, 'laserReadoutTime', 10e-6);
@@ -73,6 +74,9 @@ if strcmpi(sequenceType, 'xy8') && ~hasSequenceName
 end
 if strcmpi(sequenceType, 'wahuha')
     params.dsl4GeneratedPulses = roundUpToMultiple(params.dsl4Pulses, 4);
+    if ~hasPulseSpacing
+        params.pulseSpacing = params.wahuhaPulseSpacingUnit;
+    end
     if ~hasSequenceName
         params.sequenceName = sprintf('WAHUHA-%s', formatBlockCount(params.dsl4Pulses));
     end
@@ -215,12 +219,19 @@ for k = 1:count
 end
 end
 
+function multipliers = makeWahuhaGapMultipliers(block, count)
+multipliers = repeatBlock(block, count);
+if ~isempty(multipliers)
+    multipliers(end) = 1;
+end
+end
+
 function t = addWahuhaTrain(channel, t, phases, gapMultipliers, p, finalPhase)
 addPulse(channel, t, p.piHalfTime, 'pi2', p.mwAmplitude, p.wahuhaPiHalfPhases(1), 1);
-t = t + p.wahuhaPulseSpacingUnit;
+t = t + p.pulseSpacing;
 for k = 1:numel(phases)
     addPulse(channel, t, p.piHalfTime, 'sweep', p.mwAmplitude, phases(k), gapMultipliers(k));
-    t = t + p.wahuhaPulseSpacingUnit*gapMultipliers(k);
+    t = t + p.pulseSpacing*gapMultipliers(k);
 end
 addPulse(channel, t, p.piHalfTime, 'sweep', p.mwAmplitude, finalPhase, 1);
 t = t + p.piHalfTime;
@@ -297,7 +308,7 @@ switch lower(sequenceType)
 
     case 'wahuha'
         wahuhaPhases = repeatBlock(p.wahuhaPhaseBlock, p.dsl4GeneratedPulses);
-        wahuhaGapMultipliers = repeatBlock(p.wahuhaGapMultBlock, p.dsl4GeneratedPulses);
+        wahuhaGapMultipliers = makeWahuhaGapMultipliers(p.wahuhaGapMultBlock, p.dsl4GeneratedPulses);
         t = addWahuhaTrain(Channels(mwCh), t, wahuhaPhases, wahuhaGapMultipliers, p, p.wahuhaPiHalfPhases(2));
         sweepSpec.type = 'Frequency';
         sweepSpec.rise = 'sweep';
