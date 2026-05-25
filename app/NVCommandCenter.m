@@ -287,6 +287,7 @@ myCounter.AvgIndex = 0;
 myCounter.RawData = [];
 myCounter.ProcessedData = [];
 myCounter.AveragedData = [];
+handles.CurrentAverage = 0;
 % myCounter.init();
 
 
@@ -1342,6 +1343,7 @@ while true
     end %Switch on Pulse/CW
 
     handles = MergeRuntimeAnalysisHandles(hObject,handles);
+    handles.CurrentAverage = k;
     handles = recordSNRTraceHistory(handles,myCounter,Mode,k);
     guidata(hObject,handles);
     updateSNRMonitor(handles,myCounter,Mode,k);
@@ -3857,7 +3859,7 @@ if isempty(name)
 end
 name = regexprep(name,'_samp[^_]*_avg[^_]*$','');
 samples = SanitizeFilenamePart(get(handles.editSequenceSamples,'String'));
-averages = SanitizeFilenamePart(get(handles.editAverages,'String'));
+averages = SanitizeFilenamePart(GetFilenameAverage(handles));
 if isempty(samples)
     samples = 'Unknown';
 end
@@ -3869,6 +3871,25 @@ if isempty(ext)
     ext = '.mat';
 end
 filename = [filename,ext];
+
+function averages = GetFilenameAverage(handles)
+averages = '';
+if isfield(handles,'CurrentAverage') && isnumeric(handles.CurrentAverage) && ...
+        isscalar(handles.CurrentAverage) && isfinite(handles.CurrentAverage) && ...
+        handles.CurrentAverage > 0
+    averages = sprintf('%d',floor(handles.CurrentAverage));
+    return;
+end
+try
+    if isfield(handles,'Counter') && ~isempty(handles.Counter) && ...
+            isnumeric(handles.Counter.AvgIndex) && isscalar(handles.Counter.AvgIndex) && ...
+            isfinite(handles.Counter.AvgIndex) && handles.Counter.AvgIndex > 0
+        averages = sprintf('%d',floor(handles.Counter.AvgIndex));
+        return;
+    end
+catch
+end
+averages = get(handles.editAverages,'String');
 
 function filename = BuildUniqueFilename(filename,relatedExtensions)
 if nargin < 2
