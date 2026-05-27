@@ -2,4 +2,4 @@
 data/
 __pycache__/
 *.pyc
-sequence_library/
+sequence_library/local
