@@ -477,15 +477,15 @@ switch Mode
 
     case 'Pulsed/f-sweep'
 
-          % ConfigVoltageForRange = true;
+          ConfigVoltageForRange = true;
 
-           ConfigVoltageForRange = false;
+           % ConfigVoltageForRange = false;
         % general config
         %default samplerate for pulse-ODMR
         if  ConfigVoltageForRange 
         sr_baseband = 1.125e9;
-        AmpGain = 10; % percent
-        voltage_below3GHz = 0.1;
+        AmpGain = 0; % percent
+        voltage_below3GHz = 0.05;
         voltage_above3GHz = 0.4;
 
         fopen(MAMP);
@@ -3759,6 +3759,7 @@ if ~isempty(strfind(currentFilename,autoFilename))
 end
 prefix = StripDetectedAutoFilenameTail(currentFilename);
 if ~strcmp(prefix,currentFilename)
+    prefix = StripAutoTargetPrefix(prefix);
     filename = JoinFilenameParts(prefix,autoFilename);
     return;
 end
@@ -3799,6 +3800,11 @@ for k = numel(markers):-1:1
     end
 end
 
+function prefix = StripAutoTargetPrefix(prefix)
+prefix = regexprep(prefix,'^target\d+_?','','once');
+prefix = regexprep(prefix,'^_','');
+prefix = regexprep(prefix,'_$','');
+
 function tf = IsAutoFilenameTail(candidate)
 tf = false;
 if ~isempty(regexp(candidate,'^f.*_pts[^_]*$','once'))
@@ -3827,6 +3833,8 @@ else
 end
 filename = regexprep(filename,'_+','_');
 filename = regexprep(filename,'_$','');
+targetPart = GetCurrentTargetFilenamePart();
+filename = JoinFilenameParts(targetPart,filename);
 
 function filename = BuildSaveFilename(handles,defaultName,prename)
 if nargin < 2
@@ -3927,6 +3935,50 @@ function sequenceName = GetSequenceName(handles)
 sequenceName = '';
 if isfield(handles,'PulseSequence') && isprop(handles.PulseSequence,'SequenceName')
     sequenceName = handles.PulseSequence.SequenceName;
+end
+
+function part = GetCurrentTargetFilenamePart()
+targetNumber = GetSelectedTargetNumberFromImageAcquire();
+if isnan(targetNumber)
+    targetNumber = 0;
+end
+part = ['target',SanitizeFilenamePart(FormatNumber(targetNumber))];
+
+function targetNumber = GetSelectedTargetNumberFromImageAcquire()
+targetNumber = NaN;
+apps = getappdata(0);
+appNames = fieldnames(apps);
+for k = 1:numel(appNames)
+    hFig = apps.(appNames{k});
+    if ~any(ishandle(hFig))
+        continue;
+    end
+    hFig = hFig(find(ishandle(hFig),1));
+    try
+        if ~strcmp(get(hFig,'Name'),'ImageAcquire')
+            continue;
+        end
+        imageHandles = guidata(hFig);
+        if ~isfield(imageHandles,'popupTargetList') || ~ishandle(imageHandles.popupTargetList)
+            continue;
+        end
+        popupValue = get(imageHandles.popupTargetList,'Value');
+        if popupValue <= 1
+            targetNumber = 0;
+            return;
+        end
+        targetIndex = popupValue - 1;
+        if isfield(imageHandles,'Tracker') && ~isempty(imageHandles.Tracker) && ...
+                isprop(imageHandles.Tracker,'TargetList') && ...
+                size(imageHandles.Tracker.TargetList,1) >= targetIndex && ...
+                size(imageHandles.Tracker.TargetList,2) >= 4
+            targetNumber = imageHandles.Tracker.TargetList(targetIndex,4);
+        else
+            targetNumber = targetIndex;
+        end
+        return;
+    catch
+    end
 end
 
 function part = BuildTaborSweepName(handles)
