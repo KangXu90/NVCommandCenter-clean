@@ -11,6 +11,7 @@ classdef Experiment < handle
         SpecialData
         SpecialVec
         TimeVector
+        NSweepFilenameParams
     end
     
     methods
@@ -40,6 +41,10 @@ classdef Experiment < handle
             
             if isempty(cell2mat([strfind(properties(a),'SpecialVec')]))
                 a.SpecialVec = [];
+            end
+            
+            if isempty(cell2mat([strfind(properties(a),'NSweepFilenameParams')]))
+                a.NSweepFilenameParams = [];
             end
             obj = a;
         end

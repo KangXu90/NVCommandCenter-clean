@@ -55,6 +55,7 @@ function NVCommandCenter_OpeningFcn(hObject, eventdata, handles, varargin)
 % varargin   command line arguments to NVCommandCenter (see VARARGIN)
 
 addpath(fullfile(pwd,'Sequences'));
+addpath(fullfile(pwd,'Sequences','generators'));
 
 % Choose default command line output for NVCommandCenter
 handles.output = hObject;
@@ -701,39 +702,31 @@ switch Mode
         
         % number of Tau
         
-        %{ kang 202/12/29 Variables for Pulsed/N-sweep
-        startN = 4;
-        stopN = 804;
-        pointsN = 201;
-        a = 90;
-        b = 180;
-        c = 270;
-        d = 0;
+        % Inputs for Pulsed/N-sweep DSL-4 sequence generation.
+        dsl4Pulses = 4:4:128;
+        piHalfTime = 13e-9;
+        wahuhaPulseSpacingUnit = 100e-9;
 
-
-        p = 50e-9;
-        XY = 16;
-        Tau = 50e-9;
-        %} Variables for Pulsed/N-sweep ended
-        
-        Ntaus = linspace(startN,stopN,pointsN);
+        Ntaus = dsl4Pulses(:).';
+        pointsN = numel(Ntaus);
         handles.specialVec = Ntaus; 
+        handles.NSweepFilenameParams = struct( ...
+            'sequenceName', 'WAHUHA-Nsweep', ...
+            'pulses', Ntaus, ...
+            'piHalfTime', piHalfTime, ...
+            'tau', wahuhaPulseSpacingUnit, ...
+            'frequency', GetObjectProperty(AWG,'Frequency1',NaN));
+        handles.SuppressPulseSequenceAutoFilename = true;
+        handles = UpdateAutoFilename(handles);
         inds = pointsN;
-        Np = startN;
+        Np = Ntaus(1);
         
         %{kang 2022/12/28 for different Ntau, Counter number would not
         %change, so there is no need to change here
         
         % get total number of counter gates
-        if XY == 2;
-            Q = generatePulseSequence_kang(p/2,p,XY*Np,[a,c], [0,a],0,1);
-        end
-        if XY == 8
-            Q = generatePulseSequence_kang(p/2,p,XY*Np,[0,0], [0,a,0,a,a,0,a,0],0,1,0,1.0);
-        end
-        if XY == 16 % DSL-4
-            Q = generatePulseSequence_WAHUHA_kang(p/2,p,Np,[90,90],[180,270,90,0,180,90,270,0,0,90,270,180,0,270,90,180],0,1,0,1.0);
-        end
+        unifiedParams = buildUnifiedNSweepParams(Np, piHalfTime, wahuhaPulseSpacingUnit);
+        Q = generateUnifiedSequence(unifiedParams.sequenceType, unifiedParams.params, '');
 
         handles.PulseSequence = Q;
         PulseVector = Ntaus;
@@ -1197,15 +1190,8 @@ while true
                 
                 % turn on SG RF
                 Np = Ntaus(qq);
-                if XY == 2;
-                    Q = generatePulseSequence_kang(p/2,p,XY*Np,[0,d], [a,c],0,1);
-                end
-                if XY == 8
-                    Q = generatePulseSequence_kang(p/2,p,XY*Np,[0,0], [0,a,0,a,a,0,a,0],0,1,0,1.0);
-                end
-                if XY == 16 % DSL-4
-                    Q = generatePulseSequence_WAHUHA_kang(p/2,p,Np,[90,90],[180,270,90,0,180,90,270,0,0,90,270,180,0,270,90,180],0,1,0,1.0);
-                end
+                unifiedParams = buildUnifiedNSweepParams(Np, piHalfTime, wahuhaPulseSpacingUnit);
+                Q = generateUnifiedSequence(unifiedParams.sequenceType, unifiedParams.params, '');
                 handles.PulseSequence = Q;
                 handles.PulseSequence.Sweeps.StartValue = 0;
                 handles.PulseSequence.Sweeps.StopValue = 0;
@@ -2001,6 +1987,21 @@ end
 
 drawnow();
 
+function unified = buildUnifiedNSweepParams(Np, piHalfTime, wahuhaPulseSpacingUnit)
+params = struct();
+params.piHalfTime = piHalfTime;
+params.piTime = 2*piHalfTime;
+params.mwAmplitude = 1.0;
+params.sweep = struct('start', 0, 'stop', 0, 'points', 1);
+params.dsl4Pulses = round(Np);
+params.wahuhaPiHalfPhases = [90 90];
+params.wahuhaPhaseBlock = [180 270 90 0 180 90 270 0 0 90 270 180 0 270 90 180];
+params.wahuhaPulseSpacingUnit = wahuhaPulseSpacingUnit;
+params.sequenceName = sprintf('WAHUHA-N%d', round(Np));
+
+unified.sequenceType = 'WAHUHA';
+unified.params = params;
+
 % --- Executes on button press in buttonIA.
 function buttonIA_Callback(hObject, eventdata, handles)
 % hObject    handle to buttonIA (see GCBO)
@@ -2077,7 +2078,16 @@ end
 handles.PulseSequence = src;
 PulseSequencerFunctions('DrawSequenceExternal',handles.axesPulseSequence,src);
 set(handles.textSeqName,'String',src.SequenceName);
-handles = UpdateAutoFilename(handles);
+if ~isfield(handles,'SuppressPulseSequenceAutoFilename') || ...
+        ~handles.SuppressPulseSequenceAutoFilename || ...
+        ~isfield(handles,'note') || ~strcmp(handles.note,'Pulsed/N-sweep')
+    handles = UpdateAutoFilename(handles);
+else
+    try
+        guidata(handles.figure1,handles);
+    catch
+    end
+end
 
 
 % --- Executes on button press in pbLoadPS.
@@ -2144,6 +2154,9 @@ Exp.Notes = handles.note;
 Exp.SpecialData = handles.specialData;
 Exp.SpecialVec = handles.specialVec;
 Exp.TimeVector = handles.TimeVector;
+if isfield(handles,'NSweepFilenameParams')
+    Exp.NSweepFilenameParams = handles.NSweepFilenameParams;
+end
 
 [fn]= SaveExp(Exp,handles);
 
@@ -3678,6 +3691,9 @@ Exp.Notes = handles.note;
 Exp.SpecialData = handles.specialData;
 Exp.SpecialVec = handles.specialVec;
 Exp.TimeVector = handles.TimeVector;
+if isfield(handles,'NSweepFilenameParams')
+    Exp.NSweepFilenameParams = handles.NSweepFilenameParams;
+end
 
 save(fn,'Exp');
 %     [fn,Exp] = menuSave_Callback(hObject, eventdata, handles);
@@ -3818,6 +3834,11 @@ elseif ~isempty(regexp(candidate,'^sweep.*_pts[^_]*$','once'))
 end
 
 function filename = BuildExperimentFilenameCore(handles)
+if isfield(handles,'note') && strcmp(handles.note,'Pulsed/N-sweep')
+    filename = BuildNSweepFilenameCore(handles);
+    return;
+end
+
 sequenceName = GetSequenceName(handles);
 sequenceName = SanitizeFilenamePart(sequenceName);
 if isempty(sequenceName)
@@ -3831,6 +3852,41 @@ elseif ~isempty(strfind(upper(sequenceName),'RABI'))
 else
     filename = [sequenceName,'_',BuildPiName(handles),'_',BuildPulseSweepName(handles)];
 end
+filename = regexprep(filename,'_+','_');
+filename = regexprep(filename,'_$','');
+targetPart = GetCurrentTargetFilenamePart();
+filename = JoinFilenameParts(targetPart,filename);
+
+function filename = BuildNSweepFilenameCore(handles)
+params = struct();
+if isfield(handles,'NSweepFilenameParams')
+    params = handles.NSweepFilenameParams;
+end
+
+sequenceName = GetStructField(params,'sequenceName','WAHUHA-Nsweep');
+pulses = GetStructField(params,'pulses',[]);
+piHalfTime = GetStructField(params,'piHalfTime',NaN);
+tau = GetStructField(params,'tau',NaN);
+
+if isempty(pulses)
+    if isfield(handles,'specialVec')
+        pulses = handles.specialVec;
+    end
+end
+
+if isempty(pulses)
+    sweepPart = 'sweepN';
+else
+    pulses = pulses(:);
+    sweepPart = sprintf('sweepN%s-to-N%s_pts%s', ...
+        FormatNumber(min(pulses)),FormatNumber(max(pulses)),FormatNumber(numel(pulses)));
+end
+
+filename = [SanitizeFilenamePart(sequenceName),'_', ...
+    'piOver2',FormatSweepValue(piHalfTime),'_', ...
+    BuildTaborFrequencyName(handles),'_', ...
+    'tau',FormatSweepValue(tau),'_', ...
+    sweepPart];
 filename = regexprep(filename,'_+','_');
 filename = regexprep(filename,'_$','');
 targetPart = GetCurrentTargetFilenamePart();
@@ -4210,7 +4266,7 @@ out = strrep(out,'.','p');
 out = strrep(out,'+','');
 
 function value = ToDouble(value)
-if ischar(value)
+if ischar(value) || isstring(value)
     value = str2double(value);
 end
 
@@ -4225,6 +4281,13 @@ function value = GetObjectProperty(obj,propName,defaultValue)
 try
     value = obj.(propName);
 catch
+    value = defaultValue;
+end
+
+function value = GetStructField(s,fieldName,defaultValue)
+if isstruct(s) && isfield(s,fieldName) && ~isempty(s.(fieldName))
+    value = s.(fieldName);
+else
     value = defaultValue;
 end
 
@@ -4396,14 +4459,21 @@ T = table(xdata, ydata,ycontrast);
 
 writetable(T, fn, 'Sheet', 1);
 
-frequency1value = fix(str2double(Exp.SignalGenerator.Frequency1));
+frequency1value = GetExperimentFrequency(Exp);
+tauValue = GetExperimentTau(Exp);
+amplitudeValue = ToDouble(GetObjectProperty(Exp.SignalGenerator,'Amplitude',NaN));
+sweepStartValue = ToDouble(GetObjectProperty(Exp.SignalGenerator,'SweepStart1',NaN));
+sweepStopValue = ToDouble(GetObjectProperty(Exp.SignalGenerator,'SweepStop1',NaN));
+sweepPointsValue = ToDouble(GetObjectProperty(Exp.SignalGenerator,'SweepPoints1',NaN));
 
-signalgeneratordata = table(str2double(Exp.SignalGenerator.Amplitude),...
+signalgeneratordata = table(amplitudeValue,...
     frequency1value, ...
-    Exp.SignalGenerator.SweepStart1, ...
-    Exp.SignalGenerator.SweepStop1, ...
-    Exp.SignalGenerator.SweepPoints1, ...
-    'VariableNames', {'sweepfre', 'amplitude', 'sweepstart', 'sweepstop', 'sweeppoints'});
+    sweepStartValue, ...
+    sweepStopValue, ...
+    sweepPointsValue, ...
+    tauValue, ...
+    frequency1value, ...
+    'VariableNames', {'sweepfre', 'amplitude', 'sweepstart', 'sweepstop', 'sweeppoints', 'tau', 'frequency'});
 
 counterdata = table(Exp.Counter.NSamples, Exp.Counter.AvgIndex, ...
     'VariableNames', {'NSamples', 'AvgIndex'});
@@ -4442,6 +4512,34 @@ combinedData = [targetlistTable; counterdata; signalgeneratordata];
 
 % Write the combined table to an Excel file
 writetable(combinedData, fn, 'Sheet', 2);
+
+function frequency = GetExperimentFrequency(Exp)
+frequency = NaN;
+try
+    if isprop(Exp,'NSweepFilenameParams') && isstruct(Exp.NSweepFilenameParams) && ...
+            isfield(Exp.NSweepFilenameParams,'frequency')
+        frequency = ToDouble(Exp.NSweepFilenameParams.frequency);
+    end
+    if isnan(frequency)
+        frequency = ToDouble(GetObjectProperty(Exp.SignalGenerator,'Frequency1',NaN));
+    end
+    if isnan(frequency)
+        frequency = ToDouble(GetObjectProperty(Exp.SignalGenerator,'Frequency',NaN));
+    end
+catch
+    frequency = NaN;
+end
+
+function tau = GetExperimentTau(Exp)
+tau = NaN;
+try
+    if isprop(Exp,'NSweepFilenameParams') && isstruct(Exp.NSweepFilenameParams) && ...
+            isfield(Exp.NSweepFilenameParams,'tau')
+        tau = ToDouble(Exp.NSweepFilenameParams.tau);
+    end
+catch
+    tau = NaN;
+end
 
 function CreatePlotInOrigin(fname,tempelateName)
 % Obtain Origin COM Server object
