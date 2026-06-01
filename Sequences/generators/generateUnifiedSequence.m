@@ -6,6 +6,7 @@ function [PSeq, params] = generateUnifiedSequence(sequenceType, params, savePath
 %   PSeq = generateUnifiedSequence('Ramsey', struct('piTime',50e-9));
 %   [PSeq, params] = generateUnifiedSequence('XY8', params, 'my_xy8.mat'); % also returns defaults/calculated sweep values
 %   PSeq = generateUnifiedSequence('Rabi', params, ''); % no save dialog/file; sequence is returned in PSeq
+%   PSeq = generateUnifiedSequence('T1', struct('includeSecondReadout',true), ''); % optional no-pi / pi T1 pair
 %   % Step-by-step Larmor-centered XY8/Hahn sweep setup:
 %   params.frequency = 828e6; params.sweep.target = 'proton';
 %   % One-line command to copy/paste; omitting savePath opens the save dialog:
@@ -49,8 +50,8 @@ function params = fillDefaults(params, sequenceType)
 hasSequenceName = isfield(params, 'sequenceName') && ~isempty(params.sequenceName);
 hasPulseSpacing = isfield(params, 'pulseSpacing') && ~isempty(params.pulseSpacing);
 params = setDefault(params, 'sequenceName', sequenceType);
-params = setDefault(params, 'laserInitTime', 10e-6);
-params = setDefault(params, 'laserReadoutTime', 10e-6);
+params = setDefault(params, 'laserInitTime', 1e-6);
+params = setDefault(params, 'laserReadoutTime', 1e-6);
 params = setDefault(params, 'readoutDelay', 270e-9);
 params = setDefault(params, 'counterWidth', 500e-9);
 params = setDefault(params, 'delayLaserToMW', 2e-6);
@@ -61,6 +62,8 @@ params = setDefault(params, 'mwAmplitude', 1);
 params = setDefault(params, 'pulseSpacing', 0);
 params = setDefault(params, 'piHalfPhases', [0 0]);
 params = setDefault(params, 'piPhase', 90);
+params = setDefault(params, 'includeSecondReadout', []);
+params = setDefault(params, 't1SecondReadout', []);
 params = setDefault(params, 'xy8Blocks', 1);
 params = setDefault(params, 'dsl4Pulses', 4);
 params = setDefault(params, 'wahuhaPiHalfPhases', [90 90]);
@@ -109,6 +112,7 @@ switch lower(sequenceType)
 end
 
 params = applyLarmorSweepDefaults(params, sequenceType);
+params = applySecondReadoutDefault(params, sequenceType);
 end
 
 function s = setDefault(s, fieldName, value)
@@ -130,6 +134,38 @@ if ~isnumeric(value) || ~isscalar(value) || ~isfinite(value) || value <= 0 || va
     error('dsl4Pulses must be a positive integer scalar.');
 end
 value = ceil(value/multiple)*multiple;
+end
+
+function params = applySecondReadoutDefault(params, sequenceType)
+if isempty(params.includeSecondReadout)
+    if strcmpi(sequenceType, 't1')
+        params.includeSecondReadout = isTruthy(params.t1SecondReadout);
+    elseif any(strcmpi(sequenceType, {'ramsey', 'ramesy', 'hannecho', 'hahnecho', 'hahn_echo', 'xy8', 'wahuha'}))
+        params.includeSecondReadout = true;
+    else
+        params.includeSecondReadout = false;
+    end
+end
+params.includeSecondReadout = isTruthy(params.includeSecondReadout);
+
+if isempty(params.t1SecondReadout)
+    params.t1SecondReadout = params.includeSecondReadout;
+end
+params.t1SecondReadout = isTruthy(params.t1SecondReadout);
+end
+
+function tf = isTruthy(value)
+if isempty(value)
+    tf = false;
+elseif islogical(value) || isnumeric(value)
+    tf = any(value ~= 0);
+elseif ischar(value)
+    tf = any(strcmpi(value, {'true', 'on', 'yes', '1'}));
+elseif isstring(value)
+    tf = any(strcmpi(cellstr(value), {'true', 'on', 'yes', '1'}));
+else
+    tf = logical(value);
+end
 end
 
 function params = applyLarmorSweepDefaults(params, sequenceType)
@@ -276,8 +312,8 @@ switch lower(sequenceType)
         sweepSpec.type = 'Time';
         sweepSpec.rise = 'sweep';
         t = t + p.piHalfTime;
-        ramseySecondReadout = true;
-        ramseyMarkerTrain = true;
+        ramseySecondReadout = p.includeSecondReadout;
+        ramseyMarkerTrain = p.includeSecondReadout;
 
     case {'hannecho', 'hahnecho', 'hahn_echo'}
         addPulse(Channels(mwCh), t, p.piHalfTime, 'pi2', p.mwAmplitude, p.piHalfPhases(1));
@@ -288,7 +324,7 @@ switch lower(sequenceType)
         sweepSpec.type = 'Time';
         sweepSpec.rise = 'sweep';
         t = t + p.piHalfTime;
-        hahnMarkerTrain = true;
+        hahnMarkerTrain = p.includeSecondReadout;
 
     case 'xy8'
         xy8Phases = repmat([0 90 0 90 90 0 90 0], 1, p.xy8Blocks);
@@ -303,8 +339,8 @@ switch lower(sequenceType)
         sweepSpec.type = 'Time';
         sweepSpec.rise = 'sweep';
         t = t + p.piHalfTime;
-        xy8SecondReadout = true;
-        xy8MarkerTrain = true;
+        xy8SecondReadout = p.includeSecondReadout;
+        xy8MarkerTrain = p.includeSecondReadout;
 
     case 'wahuha'
         wahuhaPhases = repeatBlock(p.wahuhaPhaseBlock, p.dsl4GeneratedPulses);
@@ -317,16 +353,24 @@ switch lower(sequenceType)
         sweepSpec.points = 1;
         sweepSpec.shifts = 0;
         sweepSpec.add = 0;
-        wahuhaSecondReadout = true;
+        wahuhaSecondReadout = p.includeSecondReadout;
 
     case 't1'
-        readoutTime = t;
+        readoutTime = t+p.delayMWToReadout;
         addPulse(Channels(laserCh), readoutTime, p.laserReadoutTime, 'sweep', 1, 0);
         addPulse(Channels(counterCh), readoutTime + p.readoutDelay, p.counterWidth, 'Counter', 1, 0);
+        t = readoutTime + p.laserReadoutTime;
+        if p.includeSecondReadout
+            t = t + p.delayLaserToMW;
+            addPulse(Channels(mwCh), t, p.piTime, 'pi', p.mwAmplitude, p.piPhase);
+            t = t + p.piTime + p.delayMWToReadout;
+            addPulse(Channels(laserCh), t, p.laserReadoutTime, 'sweep', 1, 0);
+            addPulse(Channels(counterCh), t + p.readoutDelay, p.counterWidth, 'Counter', 1, 0);
+            t = t + p.laserReadoutTime;
+        end
         sweepSpec.channel = laserCh;
         sweepSpec.type = 'Time';
         sweepSpec.rise = 'sweep';
-        t = readoutTime + p.sweep.stop + p.laserReadoutTime;
 
     otherwise
         error('Unsupported sequence type: %s', sequenceType);

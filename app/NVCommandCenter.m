@@ -703,15 +703,17 @@ switch Mode
         % number of Tau
         
         % Inputs for Pulsed/N-sweep DSL-4 sequence generation.
-        dsl4Pulses = 4:4:128;
-        piHalfTime = 13e-9;
+        dsl4Pulses = 3200*3:168:3120*3.5;
+        piHalfTime = 15e-9;
         wahuhaPulseSpacingUnit = 100e-9;
+        includeSecondReadout = true;
 
         Ntaus = dsl4Pulses(:).';
         pointsN = numel(Ntaus);
         handles.specialVec = Ntaus; 
         handles.NSweepFilenameParams = struct( ...
             'sequenceName', 'WAHUHA-Nsweep', ...
+            'includeSecondReadout', false, ...
             'pulses', Ntaus, ...
             'piHalfTime', piHalfTime, ...
             'tau', wahuhaPulseSpacingUnit, ...
@@ -725,7 +727,7 @@ switch Mode
         %change, so there is no need to change here
         
         % get total number of counter gates
-        unifiedParams = buildUnifiedNSweepParams(Np, piHalfTime, wahuhaPulseSpacingUnit);
+        unifiedParams = buildUnifiedNSweepParams(Np, piHalfTime,includeSecondReadout, wahuhaPulseSpacingUnit);
         Q = generateUnifiedSequence(unifiedParams.sequenceType, unifiedParams.params, '');
 
         handles.PulseSequence = Q;
@@ -1190,7 +1192,7 @@ while true
                 
                 % turn on SG RF
                 Np = Ntaus(qq);
-                unifiedParams = buildUnifiedNSweepParams(Np, piHalfTime, wahuhaPulseSpacingUnit);
+                unifiedParams = buildUnifiedNSweepParams(Np, piHalfTime,includeSecondReadout, wahuhaPulseSpacingUnit);
                 Q = generateUnifiedSequence(unifiedParams.sequenceType, unifiedParams.params, '');
                 handles.PulseSequence = Q;
                 handles.PulseSequence.Sweeps.StartValue = 0;
@@ -1987,7 +1989,7 @@ end
 
 drawnow();
 
-function unified = buildUnifiedNSweepParams(Np, piHalfTime, wahuhaPulseSpacingUnit)
+function unified = buildUnifiedNSweepParams(Np, piHalfTime,includeSecondReadout, wahuhaPulseSpacingUnit)
 params = struct();
 params.piHalfTime = piHalfTime;
 params.piTime = 2*piHalfTime;
@@ -1995,6 +1997,7 @@ params.mwAmplitude = 1.0;
 params.sweep = struct('start', 0, 'stop', 0, 'points', 1);
 params.dsl4Pulses = round(Np);
 params.wahuhaPiHalfPhases = [90 90];
+params.includeSecondReadout = includeSecondReadout;
 params.wahuhaPhaseBlock = [180 270 90 0 180 90 270 0 0 90 270 180 0 270 90 180];
 params.wahuhaPulseSpacingUnit = wahuhaPulseSpacingUnit;
 params.sequenceName = sprintf('WAHUHA-N%d', round(Np));
