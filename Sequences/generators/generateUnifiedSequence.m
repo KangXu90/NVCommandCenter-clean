@@ -63,7 +63,6 @@ params = setDefault(params, 'pulseSpacing', 0);
 params = setDefault(params, 'piHalfPhases', [0 0]);
 params = setDefault(params, 'piPhase', 90);
 params = setDefault(params, 'includeSecondReadout', []);
-params = setDefault(params, 't1SecondReadout', []);
 params = setDefault(params, 'xy8Blocks', 1);
 params = setDefault(params, 'dsl4Pulses', 4);
 params = setDefault(params, 'wahuhaPiHalfPhases', [90 90]);
@@ -138,20 +137,13 @@ end
 
 function params = applySecondReadoutDefault(params, sequenceType)
 if isempty(params.includeSecondReadout)
-    if strcmpi(sequenceType, 't1')
-        params.includeSecondReadout = isTruthy(params.t1SecondReadout);
-    elseif any(strcmpi(sequenceType, {'ramsey', 'ramesy', 'hannecho', 'hahnecho', 'hahn_echo', 'xy8', 'wahuha'}))
+    if any(strcmpi(sequenceType, {'t1', 'ramsey', 'ramesy', 'hannecho', 'hahnecho', 'hahn_echo', 'xy8', 'wahuha'}))
         params.includeSecondReadout = true;
     else
         params.includeSecondReadout = false;
     end
 end
 params.includeSecondReadout = isTruthy(params.includeSecondReadout);
-
-if isempty(params.t1SecondReadout)
-    params.t1SecondReadout = params.includeSecondReadout;
-end
-params.t1SecondReadout = isTruthy(params.t1SecondReadout);
 end
 
 function tf = isTruthy(value)
