@@ -711,10 +711,14 @@ switch Mode
         wahuhaPiHalfTime = 16e-9;
         wahuhaPulseSpacingUnit = 100e-9;
 
-        % 指数参数空间，点是8的倍数，从8到6250共30个点（无重复）
-        k_values = unique(ceil(logspace(log10(1), log10(6250/8), 100)));
-        selected_idx = round(linspace(1, length(k_values), 30));
-        XY8Pulses = k_values(selected_idx) * 8;
+        % 使用自然指数间隔（以 e 为底），点是8的倍数，从8到6250共30个点（无重复）
+        % 先生成较密的指数候选值，映射到8的倍数并去重，再均匀选取30个点
+        cand = unique(ceil(exp(linspace(log(8), log(1250), 400)) / 8));
+        if numel(cand) < 30
+            cand = unique(ceil(exp(linspace(log(8), log(6150), 800)) / 8));
+        end
+        selected_idx = round(linspace(1, numel(cand), 30));
+        XY8Pulses = cand(selected_idx) * 8;
         xy8PiHalfTime = 16e-9;
         xy8PiTime = 32e-9;
         xy8PulseSpacing = 320e-9-32e-9;
