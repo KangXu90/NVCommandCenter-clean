@@ -28,6 +28,7 @@ classdef ImageAcquisition < handle
         updateCounterListenerHandle;
         ClockLineForImage = 1; % set to 1 as default, can set in init script
         CountersForImage = 1;  % set to 1 as default, can set up others in init script
+        NotifyEnabled = true;  % set false during tracking to suppress per-point GUI updates
     end % properties
     
     events
@@ -49,23 +50,31 @@ classdef ImageAcquisition < handle
         end
         
         function [] = SetCursor(obj)
-            
+
             % X Y cursor positions controller with NI
             VxOffset = obj.OffsetValues(1);
             VyOffset = obj.OffsetValues(2);
-            
+
             % set the offset voltages to the output voltage variables
             obj.interfaceNIDAQ.AnalogOutVoltages(1) = obj.CursorPosition(1) + VxOffset;
             obj.interfaceNIDAQ.AnalogOutVoltages(2) = obj.CursorPosition(2) + VyOffset;
-            
+
             % call the command to write all outlines
+            t0 = tic;
             obj.interfaceNIDAQ.WriteAnalogOutAllLines();
-            
+            fprintf('      [SetCursor] NI AO write (XY): %.3f s\n', toc(t0));
+
             % Z cursor position set with either APT controller
+            t0 = tic;
             obj.setZPos(obj.CursorPosition(3));
-            
-            % notify listeners of the new position
-            notify(obj,'UpdateCursorPosition');
+            fprintf('      [SetCursor] piezo Z write: %.3f s\n', toc(t0));
+
+            % notify listeners of the new position (suppressed during tracking)
+            t0 = tic;
+            if obj.NotifyEnabled
+                notify(obj,'UpdateCursorPosition');
+            end
+            fprintf('      [SetCursor] notify: %.3f s\n', toc(t0));
         end
           function [] = SetCursor2D(obj)
             

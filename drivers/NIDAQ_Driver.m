@@ -205,51 +205,41 @@ classdef NIDAQ_Driver < handle
         end
         
         function WriteAnalogOutVoltage(obj,Device,Value,MinVal,MaxVal)
-            
+
             % explicit casting to double precision float
             Value = double(Value);
             MinVal = double(MinVal);
             MaxVal = double(MaxVal);
-            
+
             % create a new task
+            t0 = tic;
             [status,b,obj.TaskHandles] = ...
                     calllib(obj.LibraryName,'DAQmxCreateTask','NIDAQTask',obj.TaskHandles);
-                
-                    % Error Check
                     obj.CheckErrorStatus(status);
-                
+
             % create an analog out voltage channel
             [status] = calllib(obj.LibraryName,'DAQmxCreateAOVoltageChan',obj.TaskHandles,Device,'MyAO',...
                 MinVal, MaxVal,obj.DAQmx_Val_Volts ,[]);
-            
-                    % Error Check
                     obj.CheckErrorStatus(status);
-            
+            fprintf('        [WriteAnalogOutVoltage %s] CreateTask+Chan: %.3f s\n', Device, toc(t0));
+
             % write an arbitrary voltage to the task
             AutoStart = 1;
             DefaultTimeOut = 10; %seconds
-            
-            
+            t0 = tic;
             [status] = calllib(obj.LibraryName,'DAQmxWriteAnalogScalarF64',...
                 obj.TaskHandles, AutoStart, DefaultTimeOut, Value,[]);
-            
-                    % Error Check
                     obj.CheckErrorStatus(status);
-            
-            % stop the task
+            fprintf('        [WriteAnalogOutVoltage %s] Write: %.3f s\n', Device, toc(t0));
+
+            % stop and clear the task
+            t0 = tic;
             [status]=calllib(obj.LibraryName,'DAQmxStopTask',obj.TaskHandles);
-            
-                    % Error Check
                     obj.CheckErrorStatus(status);
-            
-            % clear the task
             [status]=calllib(obj.LibraryName,'DAQmxClearTask',obj.TaskHandles);
-            
-                    % Error Check
                     obj.CheckErrorStatus(status);
-            
-            % return the TaskHandles back to 0
             obj.TaskHandles = 0;
+            fprintf('        [WriteAnalogOutVoltage %s] Stop+Clear: %.3f s\n', Device, toc(t0));
         end % WriteAnalogOutVoltage
         
         

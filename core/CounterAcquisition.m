@@ -39,43 +39,44 @@ classdef CounterAcquisition < handle
       
       
       function [] = GetCountsPerSecond(obj)
-            
-         
+
             % configure the pulses and counters
-            
+            t0 = tic;
             obj.SetCounter();
             obj.SetPulseTrain();
+            fprintf('      [CounterAcq] setup tasks: %.3f s\n', toc(t0));
 
             % start the counters and the voltages
+            t0 = tic;
             obj.interfaceNIDAQ.StartTask('CounterAcq');
-            
+
             % wait for it to start
-              % pause(0.1); % this is needed if call by ViewCounterAcquisition 
+              % pause(0.1); % this is needed if call by ViewCounterAcquisition
             % first start the pulse train
             obj.interfaceNIDAQ.StartTask('PulseTrain');
-            
-            % wait for it to start
-              % pause(0.1);
-            % 
-            
+            fprintf('      [CounterAcq] start tasks: %.3f s\n', toc(t0));
+
             % wait until the counter finishes
+            t0 = tic;
             obj.interfaceNIDAQ.WaitUntilTaskDone('CounterAcq');
+            fprintf('      [CounterAcq] WaitUntilDone: %.3f s\n', toc(t0));
 
             % read out the data
+            t0 = tic;
             obj.CounterData = obj.interfaceNIDAQ.ReadCounterBuffer('CounterAcq',obj.NumberOfSamples);
-            
+
             % clear the tasks
             obj.interfaceNIDAQ.ClearTask('CounterAcq');
             obj.interfaceNIDAQ.ClearTask('PulseTrain');
-            
+
             % process the data into a meaningful number
-            
             DiffCounts = diff(obj.CounterData);
             TotalCounts = sum(DiffCounts);
             % counts per second is total counts divided by the total
             % acquisition time, which is the number of sample periods X
             % dwell time X duty cycle
             obj.CountsPerSecond = TotalCounts/((obj.NumberOfSamples-1)*obj.DwellTime*obj.DutyCycle);
+            fprintf('      [CounterAcq] read+clear+process: %.3f s\n', toc(t0));
 
       end
         
