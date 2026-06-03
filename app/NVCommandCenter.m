@@ -711,7 +711,10 @@ switch Mode
         wahuhaPiHalfTime = 16e-9;
         wahuhaPulseSpacingUnit = 100e-9;
 
-        XY8Pulses = 8:240:6250;
+        % 指数参数空间，点是8的倍数，从8到6250共30个点（无重复）
+        k_values = unique(ceil(logspace(log10(1), log10(6250/8), 100)));
+        selected_idx = round(linspace(1, length(k_values), 30));
+        XY8Pulses = k_values(selected_idx) * 8;
         xy8PiHalfTime = 16e-9;
         xy8PiTime = 32e-9;
         xy8PulseSpacing = 320e-9-32e-9;
@@ -1342,6 +1345,7 @@ while true
                         end
 
                         myCounter.disarm();
+                        % pause(0.5);
                         handles.PulseSequence.incrementSweepIndex();
                     else
                         disp('Counter Dropped a Pulse. Repeating');
