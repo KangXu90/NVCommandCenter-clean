@@ -79,6 +79,7 @@ params = setDefault(params, 'piHalfPhases', [0 0]);
 params = setDefault(params, 'piPhase', 90);
 params = setDefault(params, 'includeSecondReadout', []);
 params = setDefault(params, 'xy8Blocks', 1);
+params = setDefault(params, 'xy8MarkerEndDelay', 4e-6);
 params = setDefault(params, 'dsl4Pulses', 4);
 params = setDefault(params, 'wahuhaPiHalfPhases', [90 90]);
 params = setDefault(params, 'wahuhaPhaseBlock', [180 270 90 0 180 90 270 0 0 90 270 180 0 270 90 180]);
@@ -314,6 +315,7 @@ xy8SweepMultipliers = [];
 wahuhaSecondReadout = false;
 wahuhaPhases = [];
 wahuhaGapMultipliers = [];
+endMarkerAdded = false;
 
 addPulse(Channels(laserCh), 0, p.laserInitTime, 'Init', 1, 0);
 addPulse(Channels(counterCh), p.readoutDelay, p.counterWidth, 'Counter', 1, 0);
@@ -432,8 +434,9 @@ if xy8SecondReadout
 end
 
 if xy8MarkerTrain
-    t = t + p.delayLaserToMW;
-    t = addXy8Train(Channels(markerCh), t, xy8Phases, xy8SweepMultipliers, p, p.piHalfPhases(2), 1);
+    t = t + p.xy8MarkerEndDelay;
+    addPulse(Channels(markerCh), t, 0, 'End', 1, 0);
+    endMarkerAdded = true;
 end
 
 if wahuhaSecondReadout
@@ -468,7 +471,9 @@ if hahnMarkerTrain
     t = t + p.piHalfTime;
 end
 
-addPulse(Channels(markerCh), t + p.delayMWToReadout, 0, 'End', 1, 0);
+if ~endMarkerAdded
+    addPulse(Channels(markerCh), t + p.delayMWToReadout, 0, 'End', 1, 0);
+end
 end
 
 function Channels = makeChannels(hw)
