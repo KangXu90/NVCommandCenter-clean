@@ -60,21 +60,15 @@ classdef ImageAcquisition < handle
             obj.interfaceNIDAQ.AnalogOutVoltages(2) = obj.CursorPosition(2) + VyOffset;
 
             % call the command to write all outlines
-            t0 = tic;
             obj.interfaceNIDAQ.WriteAnalogOutAllLines();
-            fprintf('      [SetCursor] NI AO write (XY): %.3f s\n', toc(t0));
 
             % Z cursor position set with either APT controller
-            t0 = tic;
             obj.setZPos(obj.CursorPosition(3));
-            fprintf('      [SetCursor] piezo Z write: %.3f s\n', toc(t0));
 
             % notify listeners of the new position (suppressed during tracking)
-            t0 = tic;
             if obj.NotifyEnabled
                 notify(obj,'UpdateCursorPosition');
             end
-            fprintf('      [SetCursor] notify: %.3f s\n', toc(t0));
         end
           function [] = SetCursor2D(obj)
             

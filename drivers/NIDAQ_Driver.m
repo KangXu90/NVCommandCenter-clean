@@ -212,7 +212,6 @@ classdef NIDAQ_Driver < handle
             MaxVal = double(MaxVal);
 
             % create a new task
-            t0 = tic;
             [status,b,obj.TaskHandles] = ...
                     calllib(obj.LibraryName,'DAQmxCreateTask','NIDAQTask',obj.TaskHandles);
                     obj.CheckErrorStatus(status);
@@ -221,25 +220,20 @@ classdef NIDAQ_Driver < handle
             [status] = calllib(obj.LibraryName,'DAQmxCreateAOVoltageChan',obj.TaskHandles,Device,'MyAO',...
                 MinVal, MaxVal,obj.DAQmx_Val_Volts ,[]);
                     obj.CheckErrorStatus(status);
-            fprintf('        [WriteAnalogOutVoltage %s] CreateTask+Chan: %.3f s\n', Device, toc(t0));
 
             % write an arbitrary voltage to the task
             AutoStart = 1;
             DefaultTimeOut = 10; %seconds
-            t0 = tic;
             [status] = calllib(obj.LibraryName,'DAQmxWriteAnalogScalarF64',...
                 obj.TaskHandles, AutoStart, DefaultTimeOut, Value,[]);
                     obj.CheckErrorStatus(status);
-            fprintf('        [WriteAnalogOutVoltage %s] Write: %.3f s\n', Device, toc(t0));
 
             % stop and clear the task
-            t0 = tic;
             [status]=calllib(obj.LibraryName,'DAQmxStopTask',obj.TaskHandles);
                     obj.CheckErrorStatus(status);
             [status]=calllib(obj.LibraryName,'DAQmxClearTask',obj.TaskHandles);
                     obj.CheckErrorStatus(status);
             obj.TaskHandles = 0;
-            fprintf('        [WriteAnalogOutVoltage %s] Stop+Clear: %.3f s\n', Device, toc(t0));
         end % WriteAnalogOutVoltage
         
         

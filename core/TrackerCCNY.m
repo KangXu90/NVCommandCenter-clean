@@ -25,18 +25,14 @@ classdef TrackerCCNY < Tracker
             end
 
             % next do the counter acquisition
-            t0 = tic;
            	obj.hCounterAcquisition.GetCountsPerSecond();
-            fprintf('    [GetCountsCurPos] GetCountsPerSecond: %.3f s\n', toc(t0));
             counts = obj.hCounterAcquisition.CountsPerSecond();
         end
 
         function [counts] = GetCountsAtPos(obj,Pos)
             counts = 0;
-            t0 = tic;
             obj.hImageAcquisition.CursorPosition = Pos;
             obj.hImageAcquisition.SetCursor();
-            fprintf('    [GetCountsAtPos] SetCursor: %.3f s\n', toc(t0));
             [counts] = obj.GetCountsCurPos();
         end
         
@@ -92,7 +88,6 @@ classdef TrackerCCNY < Tracker
 %         end
         
         function [newRefPoint] = trackCenter(obj,jumpPoint)
-            t_track = tic;
                 initialLaserState = obj.hwLaserState;
                 cleanupObj = onCleanup(@()RestoreLaserState(obj,initialLaserState));
                 if ~obj.hwLaserState
@@ -176,13 +171,11 @@ classdef TrackerCCNY < Tracker
                     end
                     NNCounts = zeros(1,7);
                     % iterate though the NN points, getting counts
-                    t_nn = tic;
                     for k=1:7
                         thisPos = Nearest(k,:);
                         NNCounts(k) =  GetCountsAtPos(obj,thisPos);
                         % NNCounts(k) =  GetCountsAtPos2D(obj,thisPos); % modified by kang to realize 2D scan
                     end
-                    fprintf('  [trackCenter] iter=%d, 7-pt NN scan: %.3f s\n', iterCounter, toc(t_nn));
                     
                     % throw event that counts have been updated;
                     notify(obj,'TrackerCountsUpdated',TrackerEventData(NNCounts));
@@ -254,7 +247,6 @@ classdef TrackerCCNY < Tracker
 
                 end
                 newRefPoint = [PosX,PosY,PosZ];
-                fprintf('[trackCenter] TOTAL: %.3f s, iters=%d\n', toc(t_track), iterCounter);
 
                 % re-enable notify and fire once for final position
                 obj.hImageAcquisition.NotifyEnabled = true;
