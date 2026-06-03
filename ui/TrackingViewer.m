@@ -58,6 +58,7 @@ handles.statusString = {''};
 handles.hTracker = varargin{1};
 
 [hObject,handles] = InitEvents(hObject,handles);
+set(handles.figure1,'DeleteFcn',@(src,eventdata)cleanupTrackingViewer(src));
 % Update handles structure
 guidata(hObject, handles);
 %
@@ -111,6 +112,10 @@ function updateStatus(handles,newString)
     hObject = hObject(1);
     handles = guidata(hObject);
     handles.statusString{end+1} = newString;
+    maxStatusLines = 100;
+    if numel(handles.statusString) > maxStatusLines
+        handles.statusString = handles.statusString(end-maxStatusLines+1:end);
+    end
     if ~isViewerHandleValid(handles,'textStatus')
         return;
     end
@@ -127,7 +132,7 @@ function plotNNCounts(handles,eData)
         return;
     end
     bar(handles.axes1,eData.NewData);
-    drawnow;
+    drawnow limitrate;
     
 function updateStepSize(handles,eventdata)
     String = sprintf('Step Size Reduced: [%d,%d,%d]',eventdata.NewData(1),eventdata.NewData(2),eventdata.NewData(3));
@@ -142,9 +147,11 @@ function tf = isViewerHandleValid(handles,fieldName)
     
 function [hObject,handles] = InitEvents(hObject,handles)
 
+deleteTrackerViewerListeners(handles.hTracker);
 handles.listeners.counts = addlistener(handles.hTracker,'TrackerCountsUpdated',@(src,eventdata)plotNNCounts(handles,eventdata));
 handles.listeners.step = addlistener(handles.hTracker,'StepSizeReduced',@(src,eventdata)updateStepSize(handles,eventdata));
 handles.listeners.position = addlistener(handles.hTracker,'PositionUpdated',@(src,eventdata)updatePosition(handles,eventdata));
+setTrackerViewerListeners(handles.hTracker,handles.listeners);
 
 
 % --- Executes when user attempts to close figure1.
@@ -152,17 +159,77 @@ function figure1_CloseRequestFcn(hObject, eventdata, handles)
 % hObject    handle to figure1 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-deleteListenerIfValid(handles,'counts');
-deleteListenerIfValid(handles,'step');
-deleteListenerIfValid(handles,'position');
+cleanupTrackingViewer(hObject);
     
 % Hint: delete(hObject) closes the figure
 delete(hObject);
 
-function deleteListenerIfValid(handles,fieldName)
+function cleanupTrackingViewer(hObject)
     try
-        if isfield(handles,'listeners') && isfield(handles.listeners,fieldName) && isvalid(handles.listeners.(fieldName))
-            delete(handles.listeners.(fieldName));
+        handles = guidata(hObject);
+    catch
+        handles = struct();
+    end
+    if isfield(handles,'listeners')
+        deleteListenerStruct(handles.listeners);
+        handles.listeners = [];
+    end
+    if isfield(handles,'hTracker')
+        deleteTrackerViewerListeners(handles.hTracker);
+    end
+    try
+        if ishandle(hObject)
+            guidata(hObject,handles);
+        end
+    catch
+    end
+
+function setTrackerViewerListeners(hTracker,listeners)
+    try
+        setappdata(0,'TrackingViewerListeners',listeners);
+    catch
+    end
+    try
+        if ~isempty(hTracker) && isvalid(hTracker) && isprop(hTracker,'TrackingViewerListeners')
+            hTracker.TrackingViewerListeners = listeners;
+        end
+    catch
+    end
+
+function deleteTrackerViewerListeners(hTracker)
+    try
+        if isappdata(0,'TrackingViewerListeners')
+            deleteListenerStruct(getappdata(0,'TrackingViewerListeners'));
+            rmappdata(0,'TrackingViewerListeners');
+        end
+    catch
+    end
+    try
+        if ~isempty(hTracker) && isvalid(hTracker) && isprop(hTracker,'TrackingViewerListeners')
+            deleteListenerStruct(hTracker.TrackingViewerListeners);
+            hTracker.TrackingViewerListeners = [];
+        end
+    catch
+    end
+
+function deleteListenerStruct(listeners)
+    if isempty(listeners)
+        return;
+    end
+    if isstruct(listeners)
+        names = fieldnames(listeners);
+        for k = 1:numel(names)
+            deleteListenerHandle(listeners.(names{k}));
+        end
+    else
+        deleteListenerHandle(listeners);
+    end
+
+function deleteListenerHandle(listenerHandle)
+    try
+        if ~isempty(listenerHandle)
+            validMask = isvalid(listenerHandle);
+            delete(listenerHandle(validMask));
         end
     catch
     end

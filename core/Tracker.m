@@ -14,6 +14,7 @@ classdef Tracker < handle
         InitialPosition
         MinCursorPosition
         MaxCursorPosition
+        TrackingViewerListeners = []
         hasAborted = 0;
     end
     

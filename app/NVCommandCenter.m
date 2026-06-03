@@ -909,6 +909,7 @@ while true
             TrackingViewer(handles.Tracker);
             handles.Tracker.trackCenter(refPoint);
             close(findobj(0,'name','TrackingViewer'));
+            updateTrackCountsDisplay(handles);
             set(handles.textLastTrackPos,'String',datestr(now,'yyyy-mm-dd HH:MM:SS'));
         end
     end
@@ -2114,6 +2115,35 @@ end
 
 function SetStatus(handles,statusText)
 set(handles.textStatus,'String',statusText);
+
+function updateTrackCountsDisplay(handles)
+try
+    if ~isfield(handles,'Tracker') || ~isfield(handles,'textTrackCounts') || ...
+            isempty(handles.Tracker) || ~ishandle(handles.textTrackCounts)
+        return;
+    end
+
+    initialLaserState = handles.Tracker.hwLaserState;
+    cleanupObj = onCleanup(@()restoreTrackerLaserState(handles.Tracker,initialLaserState));
+    if ~handles.Tracker.hwLaserState
+        handles.Tracker.laserOn();
+    end
+
+    Counts = handles.Tracker.GetCountsCurPos;
+    set(handles.textTrackCounts,'String',Counts);
+catch err
+    disp(['Track counts update skipped: ',err.message]);
+end
+
+function restoreTrackerLaserState(tracker,laserState)
+try
+    if laserState && ~tracker.hwLaserState
+        tracker.laserOn();
+    elseif ~laserState && tracker.hwLaserState
+        tracker.laserOff();
+    end
+catch
+end
 
 function handles = InitDevices(handles)
 
