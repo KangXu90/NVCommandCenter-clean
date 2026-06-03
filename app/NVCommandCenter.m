@@ -478,15 +478,15 @@ switch Mode
 
     case 'Pulsed/f-sweep'
 
-          % ConfigVoltageForRange = true;
+           ConfigVoltageForRange = true;
 
-            ConfigVoltageForRange = false;
+            % ConfigVoltageForRange = false;
         % general config
         %default samplerate for pulse-ODMR
         if  ConfigVoltageForRange 
         sr_baseband = 1.125e9;
-        AmpGain = 0; % percent
-        voltage_below3GHz = 0.05;
+        AmpGain = 40; % percent
+        voltage_below3GHz = 0.1;
         voltage_above3GHz = 0.4;
 
         fopen(MAMP);
@@ -702,21 +702,47 @@ switch Mode
         
         % number of Tau
         
-        % Inputs for Pulsed/N-sweep DSL-4 sequence generation.
+        % Inputs for Pulsed/N-sweep sequence generation.
+        % Set nSweepSequenceType to 'WAHUHA' or 'XY8'.
+        nSweepSequenceType = 'XY8';
+        % nSweepSequenceType = 'WAHUHA';
+
         dsl4Pulses = 3200*3:168:3120*3.5;
-        piHalfTime = 15e-9;
+        wahuhaPiHalfTime = 16e-9;
         wahuhaPulseSpacingUnit = 100e-9;
+
+        XY8Pulses = 8:240:6250;
+        xy8PiHalfTime = 16e-9;
+        xy8PiTime = 32e-9;
+        xy8PulseSpacing = 320e-9-32e-9;
         includeSecondReadout = true;
 
-        Ntaus = dsl4Pulses(:).';
+        switch upper(nSweepSequenceType)
+            case 'WAHUHA'
+                Ntaus = dsl4Pulses(:).';
+                nSweepSequenceName = 'WAHUHA-Nsweep';
+                nSweepPiHalfTime = wahuhaPiHalfTime;
+                nSweepPiTime = 2*wahuhaPiHalfTime;
+                nSweepStart = wahuhaPulseSpacingUnit;
+            case 'XY8'
+                Ntaus = XY8Pulses(:).';
+                nSweepSequenceName = 'XY8-Nsweep';
+                nSweepPiHalfTime = xy8PiHalfTime;
+                nSweepPiTime = xy8PiTime;
+                nSweepStart = xy8PulseSpacing;
+            otherwise
+                error('Unsupported Pulsed/N-sweep sequence type: %s', nSweepSequenceType);
+        end
         pointsN = numel(Ntaus);
         handles.specialVec = Ntaus; 
         handles.NSweepFilenameParams = struct( ...
-            'sequenceName', 'WAHUHA-Nsweep', ...
-            'includeSecondReadout', false, ...
+            'sequenceName', nSweepSequenceName, ...
+            'includeSecondReadout', includeSecondReadout, ...
+            'sequenceType', nSweepSequenceType, ...
             'pulses', Ntaus, ...
-            'piHalfTime', piHalfTime, ...
-            'tau', wahuhaPulseSpacingUnit, ...
+            'piHalfTime', nSweepPiHalfTime, ...
+            'piTime', nSweepPiTime, ...
+            'tau', nSweepStart, ...
             'frequency', GetObjectProperty(AWG,'Frequency1',NaN));
         handles.SuppressPulseSequenceAutoFilename = true;
         handles = UpdateAutoFilename(handles);
@@ -727,7 +753,7 @@ switch Mode
         %change, so there is no need to change here
         
         % get total number of counter gates
-        unifiedParams = buildUnifiedNSweepParams(Np, piHalfTime,includeSecondReadout, wahuhaPulseSpacingUnit);
+        unifiedParams = buildUnifiedNSweepParams(Np, nSweepPiHalfTime, nSweepPiTime, includeSecondReadout, nSweepStart, nSweepSequenceType);
         Q = generateUnifiedSequence(unifiedParams.sequenceType, unifiedParams.params, '');
 
         handles.PulseSequence = Q;
@@ -1193,7 +1219,7 @@ while true
                 
                 % turn on SG RF
                 Np = Ntaus(qq);
-                unifiedParams = buildUnifiedNSweepParams(Np, piHalfTime,includeSecondReadout, wahuhaPulseSpacingUnit);
+                unifiedParams = buildUnifiedNSweepParams(Np, nSweepPiHalfTime, nSweepPiTime, includeSecondReadout, nSweepStart, nSweepSequenceType);
                 Q = generateUnifiedSequence(unifiedParams.sequenceType, unifiedParams.params, '');
                 handles.PulseSequence = Q;
                 handles.PulseSequence.Sweeps.StartValue = 0;
@@ -1990,20 +2016,44 @@ end
 
 drawnow();
 
-function unified = buildUnifiedNSweepParams(Np, piHalfTime,includeSecondReadout, wahuhaPulseSpacingUnit)
+function unified = buildUnifiedNSweepParams(Np, piHalfTime, piTime, includeSecondReadout, nSweepStart, sequenceType)
+if nargin < 6 || isempty(sequenceType)
+    sequenceType = 'WAHUHA';
+end
+
 params = struct();
 params.piHalfTime = piHalfTime;
-params.piTime = 2*piHalfTime;
+params.piTime = piTime;
 params.mwAmplitude = 1.0;
 params.sweep = struct('start', 0, 'stop', 0, 'points', 1);
-params.dsl4Pulses = round(Np);
-params.wahuhaPiHalfPhases = [90 90];
 params.includeSecondReadout = includeSecondReadout;
-params.wahuhaPhaseBlock = [180 270 90 0 180 90 270 0 0 90 270 180 0 270 90 180];
-params.wahuhaPulseSpacingUnit = wahuhaPulseSpacingUnit;
-params.sequenceName = sprintf('WAHUHA-N%d', round(Np));
 
-unified.sequenceType = 'WAHUHA';
+switch upper(sequenceType)
+    case 'WAHUHA'
+        params.dsl4Pulses = round(Np);
+        params.wahuhaPiHalfPhases = [90 90];
+        params.wahuhaPhaseBlock = [180 270 90 0 180 90 270 0 0 90 270 180 0 270 90 180];
+        params.wahuhaPulseSpacingUnit = nSweepStart;
+        params.sequenceName = sprintf('WAHUHA-N%d', round(Np));
+        unified.sequenceType = 'WAHUHA';
+
+    case 'XY8'
+        if mod(round(Np), 8) ~= 0
+            error('XY8 Pulsed/N-sweep pulse count must be a multiple of 8. Got %g.', Np);
+        end
+        xy8Blocks = round(Np)/8;
+        params.xy8Blocks = xy8Blocks;
+        params.piHalfPhases = [0 0];
+        params.piPhase = 90;
+        params.pulseSpacing = nSweepStart;
+        params.sweep = struct('start', 0, 'stop', 0, 'points', 1);
+        params.sequenceName = sprintf('XY8-%d', xy8Blocks);
+        unified.sequenceType = 'XY8';
+
+    otherwise
+        error('Unsupported Pulsed/N-sweep sequence type: %s', sequenceType);
+end
+
 unified.params = params;
 
 % --- Executes on button press in buttonIA.

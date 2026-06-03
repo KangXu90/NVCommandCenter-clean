@@ -1,17 +1,32 @@
 function [PSeq, params] = generateUnifiedSequence(sequenceType, params, savePath)
 %GENERATEUNIFIEDSEQUENCE Unified first-pass generator for common NV sequences.
 %
-% Usage:
-%   PSeq = generateUnifiedSequence('Rabi');
-%   PSeq = generateUnifiedSequence('Ramsey', struct('piTime',50e-9));
-%   [PSeq, params] = generateUnifiedSequence('XY8', params, 'my_xy8.mat'); % also returns defaults/calculated sweep values
-%   PSeq = generateUnifiedSequence('Rabi', params, ''); % no save dialog/file; sequence is returned in PSeq
-%   PSeq = generateUnifiedSequence('T1', struct('includeSecondReadout',true), ''); % optional no-pi / pi T1 pair
-%   % Step-by-step Larmor-centered XY8/Hahn sweep setup:
-%   params.frequency = 828e6; params.sweep.target = 'proton';
-%   % One-line command to copy/paste; omitting savePath opens the save dialog:
-%   generateUnifiedSequence('XY8', struct('frequency',828e6,'piTime',50e-9,'piHalfTime',25e-9,'xy8Blocks',8,'sweep',struct('target','proton')));
-%   generateUnifiedSequence('WAHUHA', struct('dsl4Pulses',16));
+% Copy/paste commands below. No output argument and no savePath means MATLAB
+% opens the save-file dialog.
+%
+%   % Rabi: edit sweep start/stop/points.
+%   generateUnifiedSequence('Rabi', struct('sequenceName','Rabi','piTime',50e-9,'piHalfTime',25e-9,'sweep',struct('start',0,'stop',500e-9,'points',101)));
+%
+%   % T1: edit sweep start/stop/points.
+%   generateUnifiedSequence('T1', struct('sequenceName','T1','piTime',50e-9,'piHalfTime',25e-9,'includeSecondReadout',true,'sweep',struct('start',50e-9,'stop',100e-6,'points',201)));
+%
+%   % Ramsey.
+%   generateUnifiedSequence('Ramsey', struct('sequenceName','Ramsey','piTime',50e-9,'piHalfTime',25e-9,'piHalfPhases',[0 0],'includeSecondReadout',true,'sweep',struct('start',20e-9,'stop',2e-6,'points',101)));
+%
+%   % Hahn-echo.
+%   generateUnifiedSequence('HahnEcho', struct('sequenceName','HahnEcho','piTime',50e-9,'piHalfTime',25e-9,'piHalfPhases',[0 0],'piPhase',90,'includeSecondReadout',true,'sweep',struct('start',20e-9,'stop',2e-6,'points',101)));
+%
+%   % XY8, centered from 1H Larmor frequency.
+%   generateUnifiedSequence('XY8', struct('sequenceName','XY8-8-1H','frequency',828e6,'piTime',50e-9,'piHalfTime',25e-9,'xy8Blocks',8,'includeSecondReadout',true,'sweep',struct('target','proton')));
+%
+%   % XY8, centered from 19F Larmor frequency.
+%   generateUnifiedSequence('XY8', struct('sequenceName','XY8-8-19F','frequency',828e6,'piTime',50e-9,'piHalfTime',25e-9,'xy8Blocks',8,'includeSecondReadout',true,'sweep',struct('target','19F')));
+%
+%   % XY8, no Larmor target; edit sweep start/stop/points manually.
+%   generateUnifiedSequence('XY8', struct('sequenceName','XY8-8','piTime',50e-9,'piHalfTime',25e-9,'xy8Blocks',8,'includeSecondReadout',true,'sweep',struct('start',20e-9,'stop',2e-6,'points',101)));
+%
+%   % WAHUHA.
+%   generateUnifiedSequence('WAHUHA', struct('sequenceName','WAHUHA-64','piHalfTime',15e-9,'piTime',30e-9,'dsl4Pulses',64,'wahuhaPiHalfPhases',[90 90],'wahuhaPulseSpacingUnit',100e-9,'includeSecondReadout',true,'sweep',struct('start',0,'stop',0,'points',1)));
 %
 % This file is intentionally independent from the older generatePulseSequence_*
 % scripts.  It is meant as a cleaner template that keeps common timing,
@@ -50,8 +65,8 @@ function params = fillDefaults(params, sequenceType)
 hasSequenceName = isfield(params, 'sequenceName') && ~isempty(params.sequenceName);
 hasPulseSpacing = isfield(params, 'pulseSpacing') && ~isempty(params.pulseSpacing);
 params = setDefault(params, 'sequenceName', sequenceType);
-params = setDefault(params, 'laserInitTime', 1e-6);
-params = setDefault(params, 'laserReadoutTime', 1e-6);
+params = setDefault(params, 'laserInitTime', 2e-6);
+params = setDefault(params, 'laserReadoutTime', 2e-6);
 params = setDefault(params, 'readoutDelay', 270e-9);
 params = setDefault(params, 'counterWidth', 500e-9);
 params = setDefault(params, 'delayLaserToMW', 2e-6);
@@ -265,6 +280,23 @@ addPulse(channel, t, p.piHalfTime, 'sweep', p.mwAmplitude, finalPhase, 1);
 t = t + p.piHalfTime;
 end
 
+function t = addXy8Train(channel, t, phases, sweepMultipliers, p, finalPhase, amplitude)
+edgeSpacing = p.pulseSpacing/2;
+middleSpacing = p.pulseSpacing;
+addPulse(channel, t, p.piHalfTime, 'pi2', amplitude, p.piHalfPhases(1), sweepMultipliers(1));
+t = t + p.piHalfTime + edgeSpacing;
+for k = 1:numel(phases)
+    addPulse(channel, t, p.piTime, 'sweep', amplitude, phases(k), sweepMultipliers(k+1));
+    if k < numel(phases)
+        t = t + p.piTime + middleSpacing;
+    else
+        t = t + p.piTime + edgeSpacing;
+    end
+end
+addPulse(channel, t, p.piHalfTime, 'sweep', amplitude, finalPhase, sweepMultipliers(end));
+t = t + p.piHalfTime;
+end
+
 function [Channels, sweepSpec] = buildSequence(sequenceType, p)
 Channels = makeChannels(p.hw);
 
@@ -321,16 +353,9 @@ switch lower(sequenceType)
     case 'xy8'
         xy8Phases = repmat([0 90 0 90 90 0 90 0], 1, p.xy8Blocks);
         xy8SweepMultipliers = makeXy8SweepMultipliers(numel(xy8Phases));
-        addPulse(Channels(mwCh), t, p.piHalfTime, 'pi2', p.mwAmplitude, p.piHalfPhases(1), xy8SweepMultipliers(1));
-        t = t + p.piHalfTime + p.pulseSpacing;
-        for k = 1:numel(xy8Phases)
-            addPulse(Channels(mwCh), t, p.piTime, 'sweep', p.mwAmplitude, xy8Phases(k), xy8SweepMultipliers(k+1));
-            t = t + p.piTime + p.pulseSpacing;
-        end
-        addPulse(Channels(mwCh), t, p.piHalfTime, 'sweep', p.mwAmplitude, p.piHalfPhases(2), xy8SweepMultipliers(end));
+        t = addXy8Train(Channels(mwCh), t, xy8Phases, xy8SweepMultipliers, p, p.piHalfPhases(2), p.mwAmplitude);
         sweepSpec.type = 'Time';
         sweepSpec.rise = 'sweep';
-        t = t + p.piHalfTime;
         xy8SecondReadout = p.includeSecondReadout;
         xy8MarkerTrain = p.includeSecondReadout;
 
@@ -398,14 +423,7 @@ end
 
 if xy8SecondReadout
     t = t + p.delayLaserToMW;
-    addPulse(Channels(mwCh), t, p.piHalfTime, 'pi2', p.mwAmplitude, p.piHalfPhases(1), xy8SweepMultipliers(1));
-    t = t + p.piHalfTime + p.pulseSpacing;
-    for k = 1:numel(xy8Phases)
-        addPulse(Channels(mwCh), t, p.piTime, 'sweep', p.mwAmplitude, xy8Phases(k), xy8SweepMultipliers(k+1));
-        t = t + p.piTime + p.pulseSpacing;
-    end
-    addPulse(Channels(mwCh), t, p.piHalfTime, 'sweep', p.mwAmplitude, p.piHalfPhases(2) + 180, xy8SweepMultipliers(end));
-    t = t + p.piHalfTime;
+    t = addXy8Train(Channels(mwCh), t, xy8Phases, xy8SweepMultipliers, p, p.piHalfPhases(2) + 180, p.mwAmplitude);
 
     readoutTime = t + p.delayMWToReadout;
     addPulse(Channels(laserCh), readoutTime, p.laserReadoutTime, 'Readout', 1, 0);
@@ -415,14 +433,7 @@ end
 
 if xy8MarkerTrain
     t = t + p.delayLaserToMW;
-    addPulse(Channels(markerCh), t, p.piHalfTime, 'pi2', 1, p.piHalfPhases(1), xy8SweepMultipliers(1));
-    t = t + p.piHalfTime + p.pulseSpacing;
-    for k = 1:numel(xy8Phases)
-        addPulse(Channels(markerCh), t, p.piTime, 'sweep', 1, xy8Phases(k), xy8SweepMultipliers(k+1));
-        t = t + p.piTime + p.pulseSpacing;
-    end
-    addPulse(Channels(markerCh), t, p.piHalfTime, 'sweep', 1, p.piHalfPhases(2), xy8SweepMultipliers(end));
-    t = t + p.piHalfTime;
+    t = addXy8Train(Channels(markerCh), t, xy8Phases, xy8SweepMultipliers, p, p.piHalfPhases(2), 1);
 end
 
 if wahuhaSecondReadout
