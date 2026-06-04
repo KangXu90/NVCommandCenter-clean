@@ -256,44 +256,49 @@ function DrawSequence(hAxes,PSeq,options)
         options.verticalSpacing = 1.5;
         options.xRes = 100;
     end
-    
+
     % if there are no channels to plot, return
     if numel(PSeq.Channels)== 0, cla(hAxes); return; end
-    
+
     % use HSV colormap
     Colors = hsv(numel(PSeq.Channels));
-    
+
     % Get Scaling
     [ScaleT, ScaleStr] = GetScale(PSeq.GetMaxRiseTime());
-    
+
     tmin = PSeq.GetMinRiseTime();
     tmax = PSeq.GetMaxRiseTime();
-    
+
     % scale the y-axis
     ymin = -0.5;
     ymax = options.verticalSpacing*numel(PSeq.Channels);
-    
+
     % clear the axes before replotting
     cla(hAxes);
-    
+    hold(hAxes,'on');
+
     % loop over all Pulse Channels
     for ichn = numel(PSeq.Channels):-1:1
 
             % set high and low line values for the channel
             yLow = (ichn -1)*options.verticalSpacing ;
             yHigh = (ichn -1)*options.verticalSpacing  + 1;
-            
+
             % set horizontal spacing
             s = linspace(0,1,options.xRes);
-            
+
             one = ones(size(s));
             t0 = tmin;
-            hold(hAxes,'on');
-            xlim(hAxes,'auto');
+            t2 = tmin; % fallback if no rises
 
-        % code from Jero's DrawSequence function
+        % Accumulate all pulse segments into single vectors, then call plot
+        % once per channel. Consecutive segments share endpoints so no NaN
+        % separators are needed — the waveform is already continuous.
+        xAll = zeros(1, PSeq.Channels(ichn).NumberOfRises * 4 * options.xRes);
+        yAll = zeros(1, PSeq.Channels(ichn).NumberOfRises * 4 * options.xRes);
+        pos = 1;
         yH = 0;
-        for irise = 1:PSeq.Channels(ichn).NumberOfRises %PLOT each rise
+        for irise = 1:PSeq.Channels(ichn).NumberOfRises
             t1 = PSeq.Channels(ichn).RiseTimes(irise);
             dt = PSeq.Channels(ichn).RiseDurations(irise);
             height = PSeq.Channels(ichn).RiseAmplitudes(irise);
@@ -306,26 +311,29 @@ function DrawSequence(hAxes,PSeq,options)
             yH = yL + height*one;
             xHL = t2*one;
             yHL = yHigh + (yLow - yHigh)*s;
-            plot(hAxes,ScaleT*[xL xLH xH xHL],[yL yLH yH yHL],'Color',Colors(ichn,:));
+            seg = [ScaleT*[xL xLH xH xHL]; [yL yLH yH yHL]];
+            n = size(seg, 2);
+            xAll(pos:pos+n-1) = seg(1,:);
+            yAll(pos:pos+n-1) = seg(2,:);
+            pos = pos + n;
             t0 = t2;
             if options.showTimes
-                text(ScaleT*xLH,(yL+yH)/2,...
-                    [' (' NiceNotation(xHL(1)-xLH(1)) ', ' NiceNotation(xLH(1)) ')'],'FontSize',8,'Parent',hAxes);
+                text(ScaleT*t1, yLow + height/2, ...
+                    [' (' NiceNotation(dt) ', ' NiceNotation(t1) ')'], 'FontSize',8,'Parent',hAxes);
             end
             if options.showTypes
-                text(ScaleT*xLH,yH+0.2, PSeq.Channels(ichn).RiseTypes(irise),'FontSize',8,'Parent',hAxes);
+                text(ScaleT*t1, yLow + height + 0.2, PSeq.Channels(ichn).RiseTypes(irise),'FontSize',8,'Parent',hAxes);
             end
         end
-        
+
         if yH > 0, % conditional statement will only plot if there is something to plot
-            xL = t2 + (tmax-t2)*s;
-            yL = yLow*one;
-            plot(hAxes,ScaleT*xL,yL,'Color',Colors(ichn,:));
-            %hold(hAxes,'off');
+            xTail = ScaleT*(t2 + (tmax-t2)*s);
+            yTail = yLow*one;
+            plot(hAxes,[xAll(1:pos-1) xTail],[yAll(1:pos-1) yTail],'Color',Colors(ichn,:));
             text(ScaleT*(tmin+0.01*(tmax-tmin)),yLow-.25,sprintf('HW Channel:%d',PSeq.Channels(ichn).HWChannel),'Color',Colors(ichn,:),'Parent',hAxes);
             xlabel(hAxes,ScaleStr);
         else
-            % plot a flat line
+            % flat line (no pulses on this channel)
             plot(hAxes,ScaleT*[tmin tmax],[yLow yLow],'Color',Colors(ichn,:));
             text(ScaleT*(tmin+0.01*(tmax-tmin)),yLow-.25,sprintf('HW Channel:%d',PSeq.Channels(ichn).HWChannel),'Color',Colors(ichn,:),'Parent',hAxes);
         end
