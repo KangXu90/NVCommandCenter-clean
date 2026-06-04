@@ -704,25 +704,36 @@ switch Mode
         
         % Inputs for Pulsed/N-sweep sequence generation.
         % Set nSweepSequenceType to 'WAHUHA' or 'XY8'.
-        nSweepSequenceType = 'XY8';
-        % nSweepSequenceType = 'WAHUHA';
+        nSweepSequenceType = 'WAHUHA';
+        % nSweepSequenceType = 'XY8';
 
-        dsl4Pulses = 3200*3:168:3120*3.5;
-        wahuhaPiHalfTime = 16e-9;
-        wahuhaPulseSpacingUnit = 100e-9;
+        switch upper(nSweepSequenceType)
+            case 'WAHUHA'
 
-        % 使用自然指数间隔（以 e 为底），点是8的倍数，从8到6250共30个点（无重复）
-        % 先生成较密的指数候选值，映射到8的倍数并去重，再均匀选取30个点
-        cand = unique(ceil(exp(linspace(log(8), log(1250), 400)) / 8));
-        if numel(cand) < 30
-            cand = unique(ceil(exp(linspace(log(8), log(6150), 800)) / 8));
+                % dsl4Pulses = 16:160:3120*5;  % linear option
+                % Log spacing (multiples of 16, from 16 to 15600, 30 points, no duplicates)
+                cand = unique(ceil(exp(linspace(log(16), log(16*15), 40)) / 16));
+                if numel(cand) < 12
+                    cand = unique(ceil(exp(linspace(log(16), log(15000), 80)) / 16));
+                end
+                selected_idx = round(linspace(1, numel(cand), 12));
+                dsl4Pulses = cand(selected_idx) * 16;
+                wahuhaPiHalfTime = 16e-9;
+                wahuhaPulseSpacingUnit = 100e-9;
+            case "XY8"
+
+                % 使用自然指数间隔（以 e 为底），点是8的倍数，从8到6250共30个点（无重复）
+                % 先生成较密的指数候选值，映射到8的倍数并去重，再均匀选取30个点
+                cand = unique(ceil(exp(linspace(log(8), log(6250), 400)) / 8));
+                if numel(cand) < 30
+                    cand = unique(ceil(exp(linspace(log(8), log(6150), 800)) / 8));
+                end
+                selected_idx = round(linspace(1, numel(cand), 30));
+                XY8Pulses = cand(selected_idx) * 8;
+                xy8PiHalfTime = 16e-9;
+                xy8PiTime = 32e-9;
+                xy8PulseSpacing = 320e-9-32e-9;
         end
-        selected_idx = round(linspace(1, numel(cand), 30));
-        XY8Pulses = cand(selected_idx) * 8;
-        xy8PiHalfTime = 16e-9;
-        xy8PiTime = 32e-9;
-        xy8PulseSpacing = 320e-9-32e-9;
-        includeSecondReadout = true;
 
         switch upper(nSweepSequenceType)
             case 'WAHUHA'
@@ -742,6 +753,7 @@ switch Mode
         end
         pointsN = numel(Ntaus);
         handles.specialVec = Ntaus; 
+        includeSecondReadout = true;
         handles.NSweepFilenameParams = struct( ...
             'sequenceName', nSweepSequenceName, ...
             'includeSecondReadout', includeSecondReadout, ...
@@ -1359,7 +1371,11 @@ while true
                     end
                     %pause(.5);
                 end % end pulse sweep loop
-                
+
+                if myCounter.hasAborted
+                    break;
+                end
+
                 handles.specialData(:,:,qq) = myCounter.AveragedData;
             end % end Ntau sweep loop
 
