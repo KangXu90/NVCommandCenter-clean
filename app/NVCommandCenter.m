@@ -478,7 +478,7 @@ switch Mode
 
     case 'Pulsed/f-sweep'
 
-           ConfigVoltageForRange = true;
+        ConfigVoltageForRange = true;
 
             % ConfigVoltageForRange = false;
         % general config
@@ -486,7 +486,7 @@ switch Mode
         if  ConfigVoltageForRange 
         sr_baseband = 1.125e9;
         AmpGain = 40; % percent
-        voltage_below3GHz = 0.1;
+        voltage_below3GHz = 0.3;
         voltage_above3GHz = 0.4;
 
         fopen(MAMP);
@@ -704,19 +704,19 @@ switch Mode
         
         % Inputs for Pulsed/N-sweep sequence generation.
         % Set nSweepSequenceType to 'WAHUHA' or 'XY8'.
-        nSweepSequenceType = 'WAHUHA';
-        % nSweepSequenceType = 'XY8';
+        % nSweepSequenceType = 'WAHUHA';
+        nSweepSequenceType = 'XY8';
 
         switch upper(nSweepSequenceType)
             case 'WAHUHA'
 
                 % dsl4Pulses = 16:160:3120*5;  % linear option
                 % Log spacing (multiples of 16, from 16 to 15600, 30 points, no duplicates)
-                cand = unique(ceil(exp(linspace(log(16), log(16*15), 40)) / 16));
-                if numel(cand) < 12
-                    cand = unique(ceil(exp(linspace(log(16), log(15000), 80)) / 16));
+                cand = unique(ceil(exp(linspace(log(16), log(16*1500), 400)) / 16));
+                if numel(cand) < 20
+                    cand = unique(ceil(exp(linspace(log(16), log(15000), 800)) / 16));
                 end
-                selected_idx = round(linspace(1, numel(cand), 12));
+                selected_idx = round(linspace(1, numel(cand), 20));
                 dsl4Pulses = cand(selected_idx) * 16;
                 wahuhaPiHalfTime = 16e-9;
                 wahuhaPulseSpacingUnit = 100e-9;
@@ -724,11 +724,11 @@ switch Mode
 
                 % 使用自然指数间隔（以 e 为底），点是8的倍数，从8到6250共30个点（无重复）
                 % 先生成较密的指数候选值，映射到8的倍数并去重，再均匀选取30个点
-                cand = unique(ceil(exp(linspace(log(8), log(6250), 400)) / 8));
-                if numel(cand) < 30
-                    cand = unique(ceil(exp(linspace(log(8), log(6150), 800)) / 8));
+                cand = unique(ceil(exp(linspace(log(8), log(8000), 400)) / 8));
+                if numel(cand) < 20
+                    cand = unique(ceil(exp(linspace(log(8), log(8000), 800)) / 8));
                 end
-                selected_idx = round(linspace(1, numel(cand), 30));
+                selected_idx = round(linspace(1, numel(cand), 20));
                 XY8Pulses = cand(selected_idx) * 8;
                 xy8PiHalfTime = 16e-9;
                 xy8PiTime = 32e-9;
