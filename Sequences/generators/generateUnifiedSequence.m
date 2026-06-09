@@ -69,8 +69,8 @@ params = setDefault(params, 'laserInitTime', 0.5e-6);
 params = setDefault(params, 'laserReadoutTime', 0.5e-6);
 params = setDefault(params, 'readoutDelay', 220e-9);
 params = setDefault(params, 'counterWidth', 250e-9);
-params = setDefault(params, 'delayLaserToMW', 0.5e-6);
-params = setDefault(params, 'delayMWToReadout', 0.5e-6);
+params = setDefault(params, 'delayLaserToMW', 2e-6);
+params = setDefault(params, 'delayMWToReadout', 2e-6);
 params = setDefault(params, 'piTime', 50e-9);
 params = setDefault(params, 'piHalfTime', params.piTime/2);
 params = setDefault(params, 'mwAmplitude', 1);
@@ -327,10 +327,9 @@ sweepSpec = struct('channel', mwCh, 'sweepClass', 'Type', 'type', 'Duration', ..
 
 switch lower(sequenceType)
     case 'rabi'
-        mwdurationtime = 5e-6;
-        addPulse(Channels(mwCh), t, mwdurationtime, 'MW', p.mwAmplitude, 1);
+        addPulse(Channels(mwCh), t, 0, 'MW', p.mwAmplitude, 0);
         sweepSpec.type = 'Duration';
-        t = t + mwdurationtime;
+        t = t + p.sweep.stop;
 
     case {'ramsey', 'ramesy'}
         addPulse(Channels(mwCh), t, p.piHalfTime, 'pi2', p.mwAmplitude, p.piHalfPhases(1));
