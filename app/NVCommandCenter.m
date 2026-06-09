@@ -478,9 +478,9 @@ switch Mode
 
     case 'Pulsed/f-sweep'
 
-        ConfigVoltageForRange = true;
+        % ConfigVoltageForRange = true;
 
-            % ConfigVoltageForRange = false;
+            ConfigVoltageForRange = false;
         % general config
         %default samplerate for pulse-ODMR
         if  ConfigVoltageForRange 

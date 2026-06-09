@@ -65,12 +65,12 @@ function params = fillDefaults(params, sequenceType)
 hasSequenceName = isfield(params, 'sequenceName') && ~isempty(params.sequenceName);
 hasPulseSpacing = isfield(params, 'pulseSpacing') && ~isempty(params.pulseSpacing);
 params = setDefault(params, 'sequenceName', sequenceType);
-params = setDefault(params, 'laserInitTime', 10e-6);
-params = setDefault(params, 'laserReadoutTime', 10e-6);
-params = setDefault(params, 'readoutDelay', 270e-9);
-params = setDefault(params, 'counterWidth', 500e-9);
-params = setDefault(params, 'delayLaserToMW', 2e-6);
-params = setDefault(params, 'delayMWToReadout', 2e-6);
+params = setDefault(params, 'laserInitTime', 0.5e-6);
+params = setDefault(params, 'laserReadoutTime', 0.5e-6);
+params = setDefault(params, 'readoutDelay', 220e-9);
+params = setDefault(params, 'counterWidth', 250e-9);
+params = setDefault(params, 'delayLaserToMW', 0.5e-6);
+params = setDefault(params, 'delayMWToReadout', 0.5e-6);
 params = setDefault(params, 'piTime', 50e-9);
 params = setDefault(params, 'piHalfTime', params.piTime/2);
 params = setDefault(params, 'mwAmplitude', 1);
@@ -327,9 +327,10 @@ sweepSpec = struct('channel', mwCh, 'sweepClass', 'Type', 'type', 'Duration', ..
 
 switch lower(sequenceType)
     case 'rabi'
-        addPulse(Channels(mwCh), t, 0, 'MW', p.mwAmplitude, 0);
+        mwdurationtime = 5e-6;
+        addPulse(Channels(mwCh), t, mwdurationtime, 'MW', p.mwAmplitude, 1);
         sweepSpec.type = 'Duration';
-        t = t + p.sweep.stop;
+        t = t + mwdurationtime;
 
     case {'ramsey', 'ramesy'}
         addPulse(Channels(mwCh), t, p.piHalfTime, 'pi2', p.mwAmplitude, p.piHalfPhases(1));
@@ -367,8 +368,8 @@ switch lower(sequenceType)
         t = addWahuhaTrain(Channels(mwCh), t, wahuhaPhases, wahuhaGapMultipliers, p, p.wahuhaPiHalfPhases(2));
         sweepSpec.type = 'Frequency';
         sweepSpec.rise = 'sweep';
-        sweepSpec.start = 2e6;
-        sweepSpec.stop = 2e6;
+        sweepSpec.start = 0e6;
+        sweepSpec.stop = 0e6;
         sweepSpec.points = 1;
         sweepSpec.shifts = 0;
         sweepSpec.add = 0;
