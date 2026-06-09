@@ -15,6 +15,7 @@ classdef DataProcessor < handle
         UpdateCounterProcData
         UpdateCounterProcData_Rabi
         UpdateCounterProcData_T2
+        UpdateCounter2D
     end
 
     methods
@@ -39,6 +40,43 @@ classdef DataProcessor < handle
             end
 
             notify(obj, 'UpdateCounterProcData', ProcessedDataEventData(inds, c.expType));
+        end
+
+        function processRawDataPulsed2D(obj, inds)
+            % 2D-sweep processing. inds = [innerIdx outerIdx].
+            % Updates Counter.AveragedData(i,j,:) (raw counts, gates on dim 3) with
+            % the running average, then Counter.ProcessedData(i,j,1) with the
+            % contrast for the selected process mode -- same definitions as the 1D
+            % Rabi/T2 methods below (Rabi: gate2/gate1; T2: (g3-g2)/(g2+g3)).
+            % Additive: leaves the 1D methods/events untouched.
+            c = obj.CounterRef;
+
+            if c.RawDataIndex == c.NCounterGates * c.NSamples
+                AvgCounts = mean(double(reshape(c.RawData, c.NCounterGates, c.NSamples)), 2)';
+                AvgCounts = reshape(AvgCounts, 1, 1, []);   % 1 x 1 x gates
+
+                prev = c.AveragedData(inds(1), inds(2), :);
+                if all(isnan(prev(:)))
+                    c.AveragedData(inds(1), inds(2), :) = AvgCounts;
+                else
+                    c.AveragedData(inds(1), inds(2), :) = ...
+                        (prev * (c.AvgIndex - 1) + AvgCounts) / c.AvgIndex;
+                end
+
+                % processed contrast for this grid point (per process mode)
+                a = c.AveragedData(inds(1), inds(2), :);   % 1 x 1 x gates
+                switch c.expType
+                    case 'Rabi'
+                        if size(a,3) >= 2, val = a(:,:,2) ./ a(:,:,1); else, val = a(:,:,1); end
+                    case 'T2'
+                        if size(a,3) >= 3, val = (a(:,:,3) - a(:,:,2)) ./ (a(:,:,2) + a(:,:,3)); else, val = a(:,:,1); end
+                    otherwise
+                        if size(a,3) >= 2, val = a(:,:,1) ./ a(:,:,2); else, val = a(:,:,1); end
+                end
+                c.ProcessedData(inds(1), inds(2), 1) = val;
+            end
+
+            notify(obj, 'UpdateCounter2D', ProcessedDataEventData(inds, c.expType));
         end
 
         function processRawDataPulsed_Rabi(obj, inds)

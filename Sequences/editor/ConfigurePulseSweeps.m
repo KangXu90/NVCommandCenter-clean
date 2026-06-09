@@ -367,10 +367,21 @@ function Init(hObject,handles)
 s = {};
 for k=1:numel(handles.PSeq.Sweeps),
     s{k} = sprintf('Sweep %d',k);
-    set(handles.listboxSweeps,'String',s);
 end
 set(handles.listboxSweeps,'String',s);
-set(handles.listboxSweeps,'Value',1);
+
+% Preserve the current selection (clamped to the valid range) instead of
+% resetting to 1. Init is also triggered by the PulseSeqeunceChangedState
+% listener whenever a sweep field is edited (setSweepParams -> throwEvent), so
+% hard-resetting to 1 made editing Sweep 2 jump the listbox back to Sweep 1.
+nSw = numel(handles.PSeq.Sweeps);
+sel = get(handles.listboxSweeps,'Value');
+if isempty(sel) || nSw < 1
+    sel = 1;
+else
+    sel = min(max(sel,1), nSw);
+end
+set(handles.listboxSweeps,'Value',sel);
 
 % fill up channels popup
 for k=1:numel(handles.PSeq.Channels),

@@ -81,6 +81,14 @@ InitGUI(hObject,handles);
 handles = InitConfigMenu(hObject,handles);
 handles = InitAnalysisMenu(hObject,handles);
 
+% Register the '2D-sweep' acquisition mode (append at the end so existing
+% hardcoded popupMode 'Value' indices stay valid). Appended only if absent.
+modeList = get(handles.popupMode,'String');
+if ~iscell(modeList), modeList = cellstr(modeList); end
+if ~any(strcmp(modeList,'2D-sweep'))
+    set(handles.popupMode,'String',[modeList; {'2D-sweep'}]);
+end
+
 % Update handles structure
 guidata(hObject, handles);
 
@@ -257,6 +265,10 @@ if isfield(handles,'hListener2')
 end
 if isfield(handles,'hListener3')
     delete(handles.hListener3);
+end
+if isfield(handles,'hListener2D')
+    delete(handles.hListener2D);
+    handles = rmfield(handles,'hListener2D');
 end
 
 % Set the Signal SG
@@ -475,6 +487,105 @@ switch Mode
         end
 
         handles.PulseSequence.SweepIndex = 1;
+
+    case '2D-sweep'
+
+        % ===== 2D pulse sweep (two PulseSweep axes; isolated from 'Pulsed') =====
+        % Sweeps(1) = sweep 1 = INNER loop (e.g. MW duration -> the live 1D trace).
+        % Sweeps(2) = sweep 2 = OUTER loop (e.g. frequency).
+        % The run block iterates these with an explicit nested loop (manual
+        % SweepIndex=[innerIdx outerIdx]), so sweep 1 is the inner loop regardless
+        % of the incr() rightmost-fastest convention.
+
+        % general config (sample rate), mirrors 'Pulsed'
+        if str2double(SG.Frequency1)>2e9
+            sr_baseband = 1.125e9;
+        else
+            sr_baseband = 1e9;
+        end
+        samplerate = num2str(8 * sr_baseband, '%.0e');
+
+        % counter: data dims = [Ninner Nouter] (= getSweepIndexMax); keep gate dim on 3
+        inds = handles.PulseSequence.getSweepIndexMax();   % [Ninner Nouter]
+        cnts = strfind([handles.PulseSequence.Channels(:).RiseTypes],'Counter');
+        CounterGates = sum([cnts{:}]);
+
+        myCounter.NSamples       = Samples;
+        myCounter.DataDims       = inds;
+        myCounter.NAverages      = Averages;
+        myCounter.NCounterGates  = CounterGates;
+        myCounter.MaxCounts      = 100;
+        myCounter.init();
+        % NICounter.init drops the gate dim for multi-D DataDims; restore it here
+        myCounter.AveragedData  = NaN([inds, CounterGates]);
+        myCounter.ProcessedData = NaN([inds, CounterGates]);
+
+        % build the initial sequence (draw + warm up)
+        handles.PulseSequence.SweepIndex = [1 1];
+        [BinarySequence,tempSequence,AWGPSeq, AWGPSeqI, AWGPSeqQ,TimeVector] = ProcessPulseSequence( ...
+            handles.PulseSequence, 400e6, 'Instruction', sr_baseband);
+        PulseSequencerFunctions('DrawSequenceExternal',handles.axesPulseSequence,tempSequence);
+        handles.TimeVector = TimeVector;
+
+        % axis vectors: inner = sweep 1, outer = sweep 2
+        innerSWP = handles.PulseSequence.Sweeps(1);
+        outerSWP = handles.PulseSequence.Sweeps(2);
+        innerVec = linspace(innerSWP.StartValue, innerSWP.StopValue, innerSWP.SweepPoints);
+        outerVec = linspace(outerSWP.StartValue, outerSWP.StopValue, outerSWP.SweepPoints);
+        handles.sweep2D_inner = innerVec;
+        handles.sweep2D_outer = outerVec;
+
+        % main GUI 1D panels: hide the secondary (dual-ruler) axes that 'Pulsed'
+        % may have left visible; the 2D mode plots directly on the primary axes
+        % (axesAvgData / axesProcessData) from the run loop.
+        handles.axesAvgData2.Visible = 'off';
+        handles.axesProcessData2.Visible = 'off';
+
+        % standalone 2D heatmap figure (X = inner/sweep1 = fast, Y = outer/sweep2)
+        % CData is the transpose of the [Ninner Nouter] layout -> [Nouter Ninner].
+        handles.fig2D = figure('Name','2D Sweep','NumberTitle','off');
+        handles.ax2D  = axes('Parent',handles.fig2D);
+        handles.hImage2D = imagesc(innerVec, outerVec, nan(numel(outerVec), numel(innerVec)), 'Parent', handles.ax2D);
+        set(handles.ax2D,'YDir','normal');
+        xlabel(handles.ax2D, sprintf('inner (sweep1, fast): %s %s', innerSWP.SweepClass, innerSWP.SweepType));
+        ylabel(handles.ax2D, sprintf('outer (sweep2): %s %s', outerSWP.SweepClass, outerSWP.SweepType));
+        title(handles.ax2D, handles.PulseSequence.SequenceName);
+        colormap(handles.ax2D, turbo);
+        colorbar(handles.ax2D);
+
+        % DataProcessor: contrast follows the selected process mode (Rabi/T2),
+        % defined in DataProcessor. The 1D traces + heatmap are drawn inline in
+        % the run loop (updateAvgDataPlot2D), so no listener is registered here.
+        promodeselec2D = get(handles.pnlProcessMode,'SelectedObject');
+        switch get(promodeselec2D,'Tag')
+            case 'buttonRabiMode'
+                myCounter.expType = 'Rabi';
+            case 'buttonT2Mode'
+                myCounter.expType = 'T2';
+            otherwise
+                myCounter.expType = '';
+        end
+        handles.DataProcessor = DataProcessor(myCounter);
+
+        % one-time AWG init (mirrors 'Pulsed')
+        AWG.Connect();
+        for ch = 1
+            AWG.Channel = ch; AWG.selectChannel();
+            AWG.SendCmd(':TRAC:DEL:ALL');
+            AWG.SendCmd(':IQM ONE');
+            AWG.SendCmd(':INIT:CONT OFF');
+            AWG.SendCmd(':TRIG:SEL TRG1');
+            AWG.SendCmd(':TRIG:LEV 0.5');
+            AWG.SendCmd(':TRIG:SOUR:ENAB TRG1');
+            AWG.SendCmd(':TRIG:STATE ON');
+            AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
+            AWG.SendCmd(':FREQ:RAST', samplerate);
+            AWG.setRFOn();
+        end
+
+        handles.PulseSequence.SweepIndex = [];
+
+        guidata(hObject,handles);
 
     case 'Pulsed/f-sweep'
 
@@ -1135,6 +1246,81 @@ while true
 
             end
 
+        case '2D-sweep'
+
+            % turn on RF
+            AWG.Connect();
+
+            % explicit nested loop: sweep 1 (Sweeps(1)) is the INNER loop, sweep 2
+            % (Sweeps(2)) is the OUTER loop. SweepIndex=[innerIdx outerIdx] feeds
+            % ProcessPulseSequence (ind(1)->Sweeps(1), ind(2)->Sweeps(2)).
+            Ninner2D = handles.PulseSequence.Sweeps(1).SweepPoints;
+            Nouter2D = handles.PulseSequence.Sweeps(2).SweepPoints;
+
+            abort2D = false;
+            for oi = 1:Nouter2D            % outer loop = sweep 2
+                if myCounter.hasAborted, abort2D = true; break; end
+                for ii = 1:Ninner2D        % inner loop = sweep 1
+                    if myCounter.hasAborted, abort2D = true; break; end
+
+                    handles.PulseSequence.SweepIndex = [ii, oi];
+
+                    % build + draw the sequence for this grid point (updates each point)
+                    [BinarySequence,tempSequence,AWGPSeq,AWGPSeqI,AWGPSeqQ,TimeVector] = ProcessPulseSequence( ...
+                        handles.PulseSequence, 400e6, 'Instruction', sr_baseband);
+                    PulseSequencerFunctions('DrawSequenceExternal',handles.axesPulseSequence,tempSequence);
+                    PG.sendSequence(BinarySequence, Samples, 0);
+                    handles.TimeVector = TimeVector;
+
+                    % the IQ waveform changes per point (frequency offset), so resend it
+                    AWGconfig.ChannelsToUse = 1;
+                    for chIdx = AWGconfig.ChannelsToUse
+                        I_wave =  AWGPSeqI(chIdx,:);
+                        Q_wave =  AWGPSeqQ(chIdx,:);
+                        [AWGI, AWGQ] = AWG.NormalIq(I_wave', Q_wave',1);
+                        w = AWG.Interleave(AWGI, AWGQ);
+                        outLen = max(ceil(numel(w)/AWG.Granularity)*AWG.Granularity, 5120);
+                        if numel(w) < outLen
+                            w(outLen) = single(0);
+                        end
+                        SendWfmToProteus(AWG, chIdx, 1, w, 16);
+                        AWG.SendCmd('INST:CHAN d%', chIdx); AWG.SendCmd(':SOUR:FUNC:MODE:SEGM 1');
+                    end
+
+                    % acquire this point (retry on dropped pulse, like 'Pulsed')
+                    acquired2D = false;
+                    while ~acquired2D
+                        if myCounter.hasAborted, abort2D = true; break; end
+                        myCounter.RawData = zeros(myCounter.NSamples*myCounter.NCounterGates,1);
+                        myCounter.RawDataIndex = 0;
+                        myCounter.arm();
+                        PG.start();
+                        while ~myCounter.isFinished()
+                            myCounter.streamCounts();
+                        end
+                        try
+                            myCounter.streamCounts();
+                        catch
+                        end
+                        PG.stop();
+                        if myCounter.isFinished()
+                            myCounter.AvgIndex = k;
+                            handles.DataProcessor.processRawDataPulsed2D([ii, oi]);
+                            myCounter.disarm();
+                            acquired2D = true;
+                            % live 1D traces (current frequency slice) + 2D heatmap
+                            updateAvgDataPlot2D(handles, myCounter, [ii, oi]);
+                        else
+                            disp('Counter Dropped a Pulse. Repeating');
+                            SetStatus(handles,'Repeating Sweep.');
+                            myCounter.disarm();
+                        end
+                    end
+                    if abort2D, break; end
+                end
+                if abort2D, break; end
+            end
+
         case 'Pulsed/f-sweep'
             % 显式 for 循环更清晰（也可以保留 getSweepIndex 的 while）
             for sIdx = 1:numel(Frequency)
@@ -1416,6 +1602,14 @@ if strcmp(Mode,'Sync Read')
     fn = ['Exp_',datestr(now,'yyyymmdd_HH-MM-SS')];
     save(fn,'Allan');
 end
+% store 2D results for saving (Counter.AveragedData is also saved via Exp)
+if strcmp(Mode,'2D-sweep')
+    handles.specialData = myCounter.AveragedData;
+    if isfield(handles,'sweep2D_inner')
+        handles.specialVec = {handles.sweep2D_inner, handles.sweep2D_outer};
+    end
+end
+
 % delete the listeners
 if isfield(handles,'hListener')
     delete(handles.hListener);
@@ -1427,6 +1621,11 @@ end
 
 if isfield(handles,'hListener3')
     delete(handles.hListener3);
+end
+% 2D-sweep listener: tear down so it can never fire during a later non-2D run
+if isfield(handles,'hListener2D')
+    delete(handles.hListener2D);
+    handles = rmfield(handles,'hListener2D');
 end
 if myCounter.hasAborted
     SetStatus(handles,'Experiment Aborted.');
@@ -1639,6 +1838,37 @@ plot(x(2:end),data,'b.-','Parent',handles.axesAvgData);
 xlabel(handles.axesAvgData,'Freq');
 drawnow();
 
+
+function updateAvgDataPlot2D(handles, src, inds)
+% Inline plotting for '2D-sweep', called each inner point from the run loop.
+% src is the Counter; AveragedData is [Ninner Nouter gates] raw counts and
+% ProcessedData(:,:,1) is the process-mode contrast (Rabi/T2, defined in
+% DataProcessor.processRawDataPulsed2D). inds = [innerIdx outerIdx].
+% Draws (reset per outer / frequency slice):
+%   - Average panel: raw counts/gate vs the inner (sweep 1) axis,
+%   - Process panel: process-mode contrast vs the inner axis,
+%   - standalone 2D heatmap: contrast over the whole grid.
+if nargin < 3 || isempty(inds)
+    return;
+end
+oi = inds(2);
+innerVec = handles.sweep2D_inner;
+data = src.AveragedData;        % [Ninner Nouter gates] raw counts
+proc = src.ProcessedData;       % contrast in (:,:,1)
+
+% 1D average trace (current outer slice): replot so it resets per frequency
+if isgraphics(handles.axesAvgData)
+    plot(handles.axesAvgData, innerVec, squeeze(data(:,oi,:)), '.-');
+end
+% 1D process trace (current outer slice)
+if isgraphics(handles.axesProcessData)
+    plot(handles.axesProcessData, innerVec, proc(:,oi,1), '.-', 'Color',[0 0.447 0.741]);
+end
+% 2D heatmap (whole grid). X = inner (fast), Y = outer, so transpose.
+if isfield(handles,'hImage2D') && ishghandle(handles.hImage2D)
+    set(handles.hImage2D, 'CData', proc(:,:,1).');
+end
+drawnow limitrate;
 
 function updateAvgDataPlotPulsed(handles,src,eventdata)
 if strcmp(handles.note, 'Pulsed/f-sweep')
@@ -4179,6 +4409,12 @@ function part = BuildPulseSweepName(handles)
 if isfield(handles,'PulseSequence') && ~isempty(handles.PulseSequence.Sweeps)
     swp = handles.PulseSequence.Sweeps(1);
     part = sprintf('sweep%s-to-%s_pts%s',FormatSweepValue(swp.StartValue),FormatSweepValue(swp.StopValue),FormatNumber(swp.SweepPoints));
+    % 2D sweep: append the second axis so the filename is distinguishable
+    if numel(handles.PulseSequence.Sweeps) >= 2
+        swp2 = handles.PulseSequence.Sweeps(2);
+        part = [part, sprintf('_x_sweep2_%s-to-%s_pts%s', ...
+            FormatSweepValue(swp2.StartValue),FormatSweepValue(swp2.StopValue),FormatNumber(swp2.SweepPoints))];
+    end
 else
     part = 'sweep';
 end
@@ -4535,36 +4771,46 @@ end
 
 function exportXls(fn, Exp)
 mode = Exp.Notes;
-switch mode
-    case'Pulsed'
-        xdata = Exp.TimeVector;
-    case'Pulsed/N-sweep'
-        xdata = Exp.TimeVector';
-    case 'Pulsed/f-sweep'
-        xdata = transpose(linspace(Exp.SignalGenerator.SweepStart1,Exp.SignalGenerator.SweepStop1,Exp.SignalGenerator.SweepPoints1));
+if strcmp(mode,'2D-sweep')
+    % 2D map: rows = inner (sweep 1, fast) axis, columns = process-mode contrast
+    % (ProcessedData(:,:,1)) for each outer (sweep 2) point. SpecialVec holds
+    % {innerVec, outerVec}.
+    contrast2D = Exp.Counter.ProcessedData(:,:,1);   % [Ninner Nouter]
+    [Ninner, Nouter] = size(contrast2D);
+    innerVec = (1:Ninner)';
+    outerVec = 1:Nouter;
+    if iscell(Exp.SpecialVec)
+        if numel(Exp.SpecialVec) >= 1 && numel(Exp.SpecialVec{1}) == Ninner
+            innerVec = Exp.SpecialVec{1}(:);
+        end
+        if numel(Exp.SpecialVec) >= 2 && numel(Exp.SpecialVec{2}) == Nouter
+            outerVec = Exp.SpecialVec{2}(:)';
+        end
+    end
+    colNames = cell(1, Nouter+1);
+    colNames{1} = 'inner_sweep1';
+    for c = 1:Nouter
+        colNames{c+1} = sprintf('outer%d_%g', c, outerVec(c));
+    end
+    colNames = matlab.lang.makeValidName(colNames);
+    T = array2table([innerVec, contrast2D], 'VariableNames', colNames);
+    writetable(T, fn, 'Sheet', 1);
+else
+    switch mode
+        case'Pulsed'
+            xdata = Exp.TimeVector;
+        case'Pulsed/N-sweep'
+            xdata = Exp.TimeVector';
+        case 'Pulsed/f-sweep'
+            xdata = transpose(linspace(Exp.SignalGenerator.SweepStart1,Exp.SignalGenerator.SweepStop1,Exp.SignalGenerator.SweepPoints1));
+    end
+
+    ydata = Exp.Counter.AveragedData;
+    ycontrast = Exp.Counter.ProcessedData(:,1);
+
+    T = table(xdata, ydata,ycontrast);
+    writetable(T, fn, 'Sheet', 1);
 end
-
-ydata = Exp.Counter.AveragedData;
-
-% if size(ydata,2)==3
-%     ycontrast = (ydata(:,2)-ydata(:,3))./(ydata(:,2)+ydata(:,3));
-% else
-%     ycontrast = ydata(:,2)./ydata(:,1);
-% end
-
-ycontrast = Exp.Counter.ProcessedData(:,1);
-
-T = table(xdata, ydata,ycontrast);
-% case'Pulsed/f-sweep';
-%     startF = str2num(get(handles.editStartF,'String'));
-%     stopF = str2num(get(handles.editStopF,'String'));
-%     pointsF = str2num(get(handles.editPointsF,'String'));
-%     xdata = transpose(linspace(startF,stopF,pointsF));
-
-%     xdata = transpose(linspace(Exp.PulseSequence.Sweeps.StartValue,Exp.PulseSequence.Sweeps.StopValue,Exp.PulseSequence.Sweeps.SweepPoints));
-
-
-writetable(T, fn, 'Sheet', 1);
 
 frequency1value = GetExperimentFrequency(Exp);
 tauValue = GetExperimentTau(Exp);
