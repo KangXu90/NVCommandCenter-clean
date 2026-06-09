@@ -3990,7 +3990,7 @@ else
 end
 
 filename = [SanitizeFilenamePart(sequenceName),'_', ...
-    'piOver2',FormatSweepValue(piHalfTime),'_', ...
+    'halfpi',FormatSweepValue(piHalfTime),'_', ...
     BuildTaborFrequencyName(handles),'_', ...
     'tau',FormatSweepValue(tau),'_', ...
     sweepPart];
@@ -4274,7 +4274,7 @@ elseif ~isempty(piHalfDurations)
         pulseLabel = 'pi';
         pulseValue = max(durationValues);
     else
-        pulseLabel = 'piOver2';
+        pulseLabel = 'halfpi';
         pulseValue = max(piHalfDurations);
     end
 elseif ~isempty(mwDurations)
@@ -4283,7 +4283,7 @@ elseif ~isempty(mwDurations)
         pulseLabel = 'pi';
         pulseValue = max(durationValues);
     else
-        pulseLabel = 'piOver2';
+        pulseLabel = 'halfpi';
         pulseValue = durationValues(1);
     end
 end
