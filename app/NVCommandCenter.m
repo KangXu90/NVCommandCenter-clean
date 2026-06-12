@@ -705,20 +705,22 @@ switch Mode
         % Inputs for Pulsed/N-sweep sequence generation.
         % Set nSweepSequenceType to 'WAHUHA' or 'XY8'.
         % nSweepSequenceType = 'WAHUHA';
-        nSweepSequenceType = 'XY8';
+        nSweepSequenceType = 'WAHUHA';
 
         switch upper(nSweepSequenceType)
             case 'WAHUHA'
 
-                % dsl4Pulses = 16:160:3120*5;  % linear option
-                % Log spacing (multiples of 16, from 16 to 15600, 30 points, no duplicates)
-                cand = unique(ceil(exp(linspace(log(16), log(16*1500), 400)) / 16));
-                if numel(cand) < 20
-                    cand = unique(ceil(exp(linspace(log(16), log(15000), 800)) / 16));
-                end
-                selected_idx = round(linspace(1, numel(cand), 20));
-                dsl4Pulses = cand(selected_idx) * 16;
-                wahuhaPiHalfTime = 16e-9;
+                % % Log spacing (multiples of 16, from 16 to 15600, 30 points, no duplicates)
+                % cand = unique(ceil(exp(linspace(log(16), log(16*1500), 400)) / 16));
+                % if numel(cand) < 20
+                %     cand = unique(ceil(exp(linspace(log(16), log(15000), 800)) / 16));
+                % end
+                % selected_idx = round(linspace(1, numel(cand), 20));
+                % dsl4Pulses = cand(selected_idx) * 16;
+
+                dsl4Pulses = 16:4:400;  % linear option
+
+                wahuhaPiHalfTime = 19e-9;
                 wahuhaPulseSpacingUnit = 100e-9;
             case "XY8"
 
