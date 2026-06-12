@@ -271,50 +271,54 @@ end
 end
 
 function [AWGIarray,AWGQarray] = ArrayToAWGIQwithFrequency(PSeq, AWGarray, SourceFreq)
-% SampleRate: AWG 的采样率（如 1e9 代表 1GS/s），用于计算 t = idx / SampleRate
+% 按 rise 索引直接生成每个脉冲段的 I/Q（不再靠重新检测 +1/-1 边沿反推段序号）。
+% 每个 rise 的采样边界与 PulseSequenceToArray 完全一致（含硬件延迟与夹紧），
+% 因此 Fre/Ph/Amp 一律按 rise 序号 l 取值，背靠背脉冲或存储≠时间序都不会错位。
+% 载波相位以序列起点 t=0 为参考，保证整条序列相干。
+% SourceFreq: AWG 采样率（如 1e9 = 1GS/s）
 
-for m = 1:size(AWGarray,1)
-    v = int16(AWGarray(m,:));
-    edge = diff([0, v, 0]);
-    all_idx   = find(edge ~= 0);
-    start_idx = all_idx(1:2:end);
-    end_idx   = all_idx(2:2:end) - 1;
+nChan = size(AWGarray,1);
+nSamp = size(AWGarray,2);
+AWGIarray = zeros(nChan, nSamp, 'single');
+AWGQarray = zeros(nChan, nSamp, 'single');
 
-    nSamp = numel(v);
-    AWGIarray(m,:) = single(zeros(1,nSamp));
-    AWGQarray(m,:) = single(zeros(1,nSamp));
+for m = 1:nChan
+    ch    = PSeq.Channels(m);
+    nRise = ch.NumberOfRises;
+    if nRise < 1, continue; end
 
-    Ph  = single(PSeq.Channels(m).RisePhases);
-    Amp = single(PSeq.Channels(m).RiseAmplitudes);
-    
-    % --- 处理频率 Fre ---
-    % 如果不存在或为空，设为 0
-    if ~isempty(PSeq.Channels(m).RiseFrequencies)
-        Fre = single(PSeq.Channels(m).RiseFrequencies);
+    % 相位/时间用 double 计算，避免长序列相位精度损失；最后再降到 single 存储
+    Ph  = double(ch.RisePhases);
+    Amp = double(ch.RiseAmplitudes);
+    if ~isempty(ch.RiseFrequencies)
+        Fre = double(ch.RiseFrequencies);
     else
-        Fre = zeros(size(Amp), 'single');
+        Fre = zeros(1, nRise);
     end
+    % 缺省补齐到 nRise，避免越界
+    if numel(Ph)  < nRise, Ph(end+1:nRise)  = 0; end
+    if numel(Amp) < nRise, Amp(end+1:nRise) = 0; end
+    if numel(Fre) < nRise, Fre(end+1:nRise) = 0; end
 
-    if ~isempty(start_idx)
-        % 遍历每个脉冲段，因为每个段的频率和起始时间不同
-        for k = 1:numel(start_idx)
-            curr_idx = start_idx(k):end_idx(k);
-            
-            % 1. 生成相对于序列起点 (t=0) 的时间向量
-            % 如果你需要“绝对相干”，t 必须从序列起始点计算
-            t = single(curr_idx - 1) / SourceFreq; 
-            
-            % 2. 计算当前段的角频率 (2 * pi * f)
-            w = 2 * pi * Fre(k);
-            
-            % 3. 计算 I/Q 值
-            % 注意：sind/cosd 处理角度，这里 w*t 是弧度，建议统一使用弧度或转换
-            % 这里加上 45 度补偿（根据你原代码）
-            total_phase_rad = w .* t + deg2rad(Ph(k) + 45);
-            
-            AWGIarray(m, curr_idx) = Amp(k) * cos(total_phase_rad);
-            AWGQarray(m, curr_idx) = Amp(k) * sin(total_phase_rad);
-        end
+    for l = 1:nRise
+        % 与 PulseSequenceToArray 一致的采样边界（含硬件延迟）
+        startTime = ch.RiseTimes(l) - ch.DelayOn;
+        stopTime  = ch.RiseTimes(l) + ch.RiseDurations(l) - ch.DelayOff;
+
+        pStart = uint32(startTime * SourceFreq);
+        pStop  = uint32(stopTime  * SourceFreq) - 1;
+        if pStop < pStart, pStop = pStart; end
+        pStart = max(0, min(pStart, nSamp-1));
+        pStop  = max(0, min(pStop,  nSamp-1));
+        if pStop < pStart, continue; end
+
+        curr_idx = double(pStart)+1 : double(pStop)+1;     % 1-based 采样索引
+        t = (curr_idx - 1) / SourceFreq;                   % 绝对时间（自 t=0，相干）
+        w = 2*pi*Fre(l);                                   % 角频率
+        total_phase_rad = w .* t + deg2rad(Ph(l) + 45);    % 含 45° IQ 补偿
+
+        AWGIarray(m, curr_idx) = single(Amp(l) * cos(total_phase_rad));
+        AWGQarray(m, curr_idx) = single(Amp(l) * sin(total_phase_rad));
     end
 end
 end
